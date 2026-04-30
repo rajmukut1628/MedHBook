@@ -22,6 +22,11 @@ class MedicalDocumentController extends Controller
         'Other',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | INDEX
+    |--------------------------------------------------------------------------
+    */
     public function index()
     {
         $types = $this->types;
@@ -31,36 +36,14 @@ class MedicalDocumentController extends Controller
             ->get()
             ->groupBy('document_type');
 
-        $patient = Patient::where('user_id', auth()->id())->first();
-
-        if ($patient) {
-            $prescriptions = Prescription::with(['doctor.user'])
-                ->where('patient_id', $patient->id)
-                ->latest()
-                ->get()
-                ->map(function ($prescription) {
-                    return (object) [
-                        'id' => $prescription->id,
-                        'title' => 'Digital Prescription #' . $prescription->id,
-                        'document_date' => $prescription->prescription_date,
-                        'created_at' => $prescription->created_at,
-                        'file_type' => 'PDF',
-                        'file_size' => 'Generated PDF',
-                        'is_prescription_pdf' => true,
-                    ];
-                });
-
-            $existing = $documents->get('Doctor Digital Prescription PDF', collect());
-
-            $documents['Doctor Digital Prescription PDF'] = $existing
-                ->merge($prescriptions)
-                ->sortByDesc('created_at')
-                ->values();
-        }
-
         return view('medical_documents.index', compact('documents', 'types'));
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE
+    |--------------------------------------------------------------------------
+    */
     public function create()
     {
         $types = $this->types;
@@ -68,6 +51,11 @@ class MedicalDocumentController extends Controller
         return view('medical_documents.create', compact('types'));
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | STORE (ENCRYPT + PRIVATE STORAGE)
+    |--------------------------------------------------------------------------
+    */
     public function store(Request $request)
     {
         $request->validate([
@@ -75,79 +63,117 @@ class MedicalDocumentController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'document_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
-            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,xls,xlsx,txt,zip', 'max:10240'],
+            'file' => [
+                'required',
+                'file',
+                'mimes:pdf,jpg,jpeg,png,webp,doc,docx,txt',
+                'max:10240'
+            ],
         ]);
 
         $file = $request->file('file');
 
+        // 🔐 Encrypt file content
         $encryptedContent = Crypt::encrypt(file_get_contents($file->getRealPath()));
 
-        $fileName = Str::uuid() . '.enc';
-        $path = 'medical-documents/' . auth()->id() . '/' . $fileName;
+        // 🔑 Generate secure filename
+        $encryptedName = Str::uuid() . '.enc';
 
+        // 📁 Private storage path
+        $path = 'medical-documents/' . auth()->id() . '/' . $encryptedName;
+
+        // 🔒 Store in PRIVATE disk
         Storage::disk('local')->put($path, $encryptedContent);
 
+        // 💾 Save DB
         MedicalDocument::create([
-            'user_id' => auth()->id(),
-            'document_type' => $request->document_type,
-            'title' => $request->title,
-            'document_date' => $request->document_date,
-            'notes' => $request->notes,
-            'file_path' => $path,
-            'file_type' => strtolower($file->getClientOriginalExtension()),
-            'file_size' => round($file->getSize() / 1024, 2) . ' KB',
-            'original_name' => $file->getClientOriginalName(),
-            'mime_type' => $file->getClientMimeType(),
-            'is_encrypted' => true,
+            'user_id'        => auth()->id(),
+            'document_type'  => $request->document_type,
+            'title'          => $request->title,
+            'document_date'  => $request->document_date,
+            'notes'          => $request->notes,
+
+            'encrypted_name' => $encryptedName,
+            'original_name'  => $file->getClientOriginalName(),
+
+            'storage_disk'   => 'local',
+            'storage_path'   => $path,
+
+            'file_type'      => strtolower($file->getClientOriginalExtension()),
+            'file_size'      => $file->getSize(),
+            'encryption_mode'=> 'server_side',
         ]);
 
         return redirect()->route('medical-documents.index')
-            ->with('success', 'Medical document uploaded securely with encryption.');
+            ->with('success', '✅ Document uploaded securely (encrypted).');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | SHOW (NO FILE ACCESS HERE)
+    |--------------------------------------------------------------------------
+    */
     public function show(MedicalDocument $medicalDocument)
     {
-        if ($medicalDocument->user_id !== auth()->id() && auth()->user()->role !== 'super_admin') {
+        if ($medicalDocument->user_id !== auth()->id()) {
             abort(403);
         }
 
         return view('medical_documents.show', compact('medicalDocument'));
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | DOWNLOAD (SECURE + DECRYPT)
+    |--------------------------------------------------------------------------
+    */
     public function download(MedicalDocument $medicalDocument)
     {
-        if ($medicalDocument->user_id !== auth()->id() && auth()->user()->role !== 'super_admin') {
-            abort(403);
+        // ❌ Admin / Developer blocked
+        if ($medicalDocument->user_id !== auth()->id()) {
+            abort(403, 'Unauthorized access.');
         }
 
-        if (!$medicalDocument->file_path || !Storage::disk('local')->exists($medicalDocument->file_path)) {
+        if (!Storage::disk($medicalDocument->storage_disk)
+            ->exists($medicalDocument->storage_path)) {
             abort(404, 'File not found.');
         }
 
-        $encryptedContent = Storage::disk('local')->get($medicalDocument->file_path);
+        // 🔐 Read encrypted
+        $encryptedContent = Storage::disk($medicalDocument->storage_disk)
+            ->get($medicalDocument->storage_path);
+
+        // 🔓 Decrypt
         $decryptedContent = Crypt::decrypt($encryptedContent);
 
         $fileName = $medicalDocument->original_name
-            ?? Str::slug($medicalDocument->title) . '.' . $medicalDocument->file_type;
+            ?? 'document.' . $medicalDocument->file_type;
 
         return response($decryptedContent)
-            ->header('Content-Type', $medicalDocument->mime_type ?? 'application/octet-stream')
+            ->header('Content-Type', 'application/octet-stream')
             ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE
+    |--------------------------------------------------------------------------
+    */
     public function destroy(MedicalDocument $medicalDocument)
     {
-        if ($medicalDocument->user_id !== auth()->id() && auth()->user()->role !== 'super_admin') {
+        if ($medicalDocument->user_id !== auth()->id()) {
             abort(403);
         }
 
-        if ($medicalDocument->file_path && Storage::disk('local')->exists($medicalDocument->file_path)) {
-            Storage::disk('local')->delete($medicalDocument->file_path);
+        if (Storage::disk($medicalDocument->storage_disk)
+            ->exists($medicalDocument->storage_path)) {
+            Storage::disk($medicalDocument->storage_disk)
+                ->delete($medicalDocument->storage_path);
         }
 
         $medicalDocument->delete();
 
         return redirect()->route('medical-documents.index')
-            ->with('success', 'Medical document deleted successfully.');
+            ->with('success', '🗑️ Document deleted securely.');
     }
 }

@@ -10,15 +10,24 @@ class MedicalDocument extends Model
         'user_id',
         'document_type',
         'title',
-        'file_path',
+        'encrypted_name',
+        'original_name',
+        'storage_disk',
+        'storage_path',
         'file_type',
         'file_size',
         'notes',
         'document_date',
+        'encryption_mode',
     ];
 
     protected $casts = [
         'document_date' => 'date',
+    ];
+
+    protected $hidden = [
+        'storage_path',
+        'encrypted_name',
     ];
 
     public function user()
@@ -26,8 +35,20 @@ class MedicalDocument extends Model
         return $this->belongsTo(User::class);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | IMPORTANT
+    |--------------------------------------------------------------------------
+    | No public URL for medical documents.
+    | Files must be downloaded only through secure controller route.
+    */
     public function getFileUrlAttribute()
     {
-        return asset('storage/' . $this->file_path);
+        return null;
+    }
+
+    public function getSecureDownloadUrlAttribute()
+    {
+        return route('medical-documents.download', $this);
     }
 }

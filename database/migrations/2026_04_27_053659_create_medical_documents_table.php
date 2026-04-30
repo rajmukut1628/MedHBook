@@ -11,19 +11,34 @@ return new class extends Migration
         Schema::create('medical_documents', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            // Owner patient/user
+            $table->foreignId('user_id')
+                ->constrained()
+                ->onDelete('cascade');
 
             $table->string('document_type');
             $table->string('title');
 
-            $table->string('file_path');
+            // Secure encrypted storage info
+            $table->string('encrypted_name')->nullable();
+            $table->string('original_name')->nullable();
+            $table->string('storage_disk')->default('local');
+            $table->string('storage_path');
+
+            // File metadata only
             $table->string('file_type')->nullable();
-            $table->string('file_size')->nullable();
+            $table->unsignedBigInteger('file_size')->nullable();
+
+            // Encryption metadata
+            $table->string('encryption_mode')->default('server_side');
 
             $table->text('notes')->nullable();
             $table->date('document_date')->nullable();
 
             $table->timestamps();
+
+            $table->index('user_id');
+            $table->index('document_type');
         });
     }
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\DoctorDashboardController;
 use App\Http\Controllers\SocialLoginController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\PatientSettingsController;
+
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -17,27 +18,24 @@ use App\Models\User;
 use App\Models\Patient;
 use App\Models\Doctor;
 
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/', function () {
     return view('welcome');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Google / Firebase Login Routes
+| Google Login
 |--------------------------------------------------------------------------
 */
 
-Route::get('/auth/google', [SocialLoginController::class, 'redirectToGoogle'])
-    ->name('google.login');
-
-Route::get('/auth/google/redirect', [SocialLoginController::class, 'redirectToGoogle'])
-    ->name('google.redirect');
-
-Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])
-    ->name('google.callback');
-
-Route::post('/firebase/google-login', [SocialLoginController::class, 'firebaseGoogleLogin'])
-    ->name('firebase.google.login');
+Route::get('/auth/google', [SocialLoginController::class, 'redirectToGoogle'])->name('google.login');
+Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])->name('google.callback');
 
 /*
 |--------------------------------------------------------------------------
@@ -46,8 +44,7 @@ Route::post('/firebase/google-login', [SocialLoginController::class, 'firebaseGo
 */
 
 Route::middleware(['auth', 'check.status'])->group(function () {
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Profile Settings Pages
     |--------------------------------------------------------------------------
@@ -58,10 +55,10 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     })->middleware('role:doctor')->name('profile.doctor.edit');
 
     Route::get('/profile/info', function () {
-    return view('profile.edit-info', [
-        'user' => auth()->user()
-    ]);
-})->middleware(['auth'])->name('profile.info.edit');
+        return view('profile.edit-info', [
+            'user' => auth()->user()
+        ]);
+    })->name('profile.info.edit');
 
     Route::get('/profile/password', function () {
         return view('profile.change-password');
@@ -70,11 +67,13 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     Route::get('/profile/delete', function () {
         return view('profile.delete');
     })->name('profile.delete.confirm');
-        /*
+
+    /*
     |--------------------------------------------------------------------------
     | Doctor Public Profile
     |--------------------------------------------------------------------------
     */
+
     Route::get('/doctor-profile/{doctor}', [DoctorController::class, 'publicProfile'])
         ->name('doctor.public.profile');
 
@@ -83,17 +82,22 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Resources
     |--------------------------------------------------------------------------
     */
+
     Route::resource('patients', PatientController::class);
     Route::resource('doctors', DoctorController::class);
+
+    // 🔐 Medical documents secured by controller ownership check
     Route::resource('medical-documents', MedicalDocumentController::class);
+
     Route::resource('appointments', AppointmentController::class);
     Route::resource('prescriptions', PrescriptionController::class);
 
     /*
     |--------------------------------------------------------------------------
-    | Download Routes
+    | Secure Download Routes
     |--------------------------------------------------------------------------
     */
+
     Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
         ->name('medical-documents.download');
 
@@ -105,21 +109,30 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Dashboard Redirect Logic
     |--------------------------------------------------------------------------
     */
+
     Route::get('/dashboard', function () {
         $user = auth()->user();
 
-        if ($user->role === 'super_admin') return redirect()->route('superadmin.dashboard');
-        if ($user->role === 'admin') return redirect()->route('admin.dashboard');
-        if ($user->role === 'doctor') return redirect()->route('doctor.dashboard');
+        if ($user->role === 'super_admin') {
+            return redirect()->route('superadmin.dashboard');
+        }
+
+        if ($user->role === 'admin') {
+            return redirect()->route('admin.dashboard');
+        }
+
+        if ($user->role === 'doctor') {
+            return redirect()->route('doctor.dashboard');
+        }
 
         return redirect()->route('patient.dashboard');
     })->name('dashboard');
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Patient Routes
     |--------------------------------------------------------------------------
     */
+
     Route::get('/find-doctors', [DoctorController::class, 'findDoctors'])
         ->middleware('role:patient')
         ->name('find.doctors');
@@ -154,6 +167,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Doctor Routes
     |--------------------------------------------------------------------------
     */
+
     Route::get('/doctor/dashboard', [DoctorDashboardController::class, 'dashboard'])
         ->middleware('role:doctor')
         ->name('doctor.dashboard');
@@ -187,6 +201,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Appointment Actions
     |--------------------------------------------------------------------------
     */
+
     Route::patch('/appointments/{appointment}/approve', [AppointmentController::class, 'approve'])
         ->name('appointments.approve');
 
@@ -203,6 +218,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Admin Dashboard
     |--------------------------------------------------------------------------
     */
+
     Route::get('/admin/dashboard', function () {
         return view('admin.dashboard', [
             'patients' => Patient::count(),
@@ -215,6 +231,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Admin / Super Admin Controls
     |--------------------------------------------------------------------------
     */
+
     Route::middleware('role:admin,super_admin')->group(function () {
         Route::post('/doctors/{doctor}/approve', [DoctorController::class, 'approve'])
             ->name('doctors.approve');
@@ -266,6 +283,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Super Admin Routes
     |--------------------------------------------------------------------------
     */
+
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/superadmin/dashboard', function () {
             return view('superadmin.dashboard', [
@@ -278,7 +296,6 @@ Route::middleware(['auth', 'check.status'])->group(function () {
 
         Route::get('/superadmin/admins', function () {
             $admins = User::where('role', 'admin')->latest()->get();
-
             return view('superadmin.admins', compact('admins'));
         })->name('superadmin.admins');
 
@@ -309,7 +326,6 @@ Route::middleware(['auth', 'check.status'])->group(function () {
 
         Route::get('/superadmin/admins/{id}/edit', function ($id) {
             $admin = User::where('role', 'admin')->findOrFail($id);
-
             return view('superadmin.edit-admin', compact('admin'));
         })->name('superadmin.admin.edit');
 
@@ -353,6 +369,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     | Breeze Profile Core Routes
     |--------------------------------------------------------------------------
     */
+
     Route::get('/profile', [ProfileController::class, 'edit'])
         ->name('profile.edit');
 
