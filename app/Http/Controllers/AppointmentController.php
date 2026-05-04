@@ -83,13 +83,13 @@ class AppointmentController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'doctor_id' => ['required', 'exists:doctors,id'],
-            'appointment_date' => ['required', 'date'],
-            'appointment_time' => ['required'],
-            'problem' => ['nullable', 'string', 'max:1000'],
-        ]);
-
+       $request->validate([
+    'doctor_id' => ['required', 'exists:doctors,id'],
+    'appointment_date' => ['required', 'date'],
+    'appointment_time' => ['required'],
+    'chamber_address' => ['required', 'string'], 
+    'problem' => ['nullable', 'string', 'max:1000'],
+]);
         $user = auth()->user();
 
         if ($user->role !== 'patient') {
@@ -131,14 +131,15 @@ class AppointmentController extends Controller
                 ->with('error', 'This time slot is already booked. Please select another slot.');
         }
 
-        Appointment::create([
-            'patient_id' => $patient->id,
-            'doctor_id' => $doctor->id,
-            'appointment_date' => $request->appointment_date,
-            'appointment_time' => $selectedTime,
-            'problem' => $request->problem,
-            'status' => 'Pending',
-        ]);
+       Appointment::create([
+    'patient_id' => $patient->id,
+    'doctor_id' => $doctor->id,
+    'appointment_date' => $request->appointment_date,
+    'appointment_time' => $selectedTime,
+    'chamber_address' => $request->chamber_address, // 🔥 ADD
+    'problem' => $request->problem,
+    'status' => 'Pending',
+]);
 
         return redirect()->route('appointments.index')
             ->with('success', 'Appointment booked successfully. Please wait for doctor approval.');

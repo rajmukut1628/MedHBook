@@ -31,19 +31,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Google Login
+    | Google OAuth Login (MedHBook)
     |--------------------------------------------------------------------------
     */
 
     'google' => [
-    'client_id' => env('GOOGLE_CLIENT_ID'),
-    'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-    'redirect' => env('GOOGLE_REDIRECT_URI'),
-],
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
 
     /*
     |--------------------------------------------------------------------------
-    | Firebase Google Login
+    | Firebase (Optional - Google/Firebase Login)
     |--------------------------------------------------------------------------
     */
 
@@ -54,7 +54,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Apple Login
+    | Apple Login (Future Use)
     |--------------------------------------------------------------------------
     */
 

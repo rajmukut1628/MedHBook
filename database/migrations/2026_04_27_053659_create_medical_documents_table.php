@@ -11,34 +11,27 @@ return new class extends Migration
         Schema::create('medical_documents', function (Blueprint $table) {
             $table->id();
 
-            // Owner patient/user
-            $table->foreignId('user_id')
-                ->constrained()
-                ->onDelete('cascade');
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 
-            $table->string('document_type');
             $table->string('title');
+            $table->string('document_type');
+            $table->string('doctor_name')->nullable();
+            $table->string('hospital_name')->nullable();
+            $table->date('document_date')->nullable();
+            $table->text('notes')->nullable();
 
-            // Secure encrypted storage info
-            $table->string('encrypted_name')->nullable();
+            $table->string('encrypted_file_path');
             $table->string('original_name')->nullable();
-            $table->string('storage_disk')->default('local');
-            $table->string('storage_path');
-
-            // File metadata only
-            $table->string('file_type')->nullable();
+            $table->string('mime_type')->nullable();
             $table->unsignedBigInteger('file_size')->nullable();
 
-            // Encryption metadata
-            $table->string('encryption_mode')->default('server_side');
-
-            $table->text('notes')->nullable();
-            $table->date('document_date')->nullable();
+            $table->string('encryption_version')->default('E2EE-V1');
+            $table->string('salt');
+            $table->string('iv');
+            $table->string('auth_tag');
+            $table->string('key_hint')->nullable();
 
             $table->timestamps();
-
-            $table->index('user_id');
-            $table->index('document_type');
         });
     }
 

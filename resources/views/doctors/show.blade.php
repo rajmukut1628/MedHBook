@@ -41,6 +41,16 @@
         color:white;
         font-size:34px;
         font-weight:900;
+        overflow:hidden;
+        border:4px solid #bbf7d0;
+        box-shadow:0 15px 35px rgba(16,185,129,.25);
+    }
+
+    .avatar img{
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        display:block;
     }
 
     .name{
@@ -55,6 +65,17 @@
         font-size:16px;
         font-weight:800;
         margin-top:4px;
+    }
+
+    .secure-badge{
+        display:inline-flex;
+        margin-top:8px;
+        padding:7px 12px;
+        border-radius:999px;
+        background:#ecfdf5;
+        color:#047857;
+        font-size:12px;
+        font-weight:900;
     }
 
     .grid{
@@ -106,6 +127,8 @@
     .btn-gray{background:#e2e8f0;color:#334155}
     .btn-yellow{background:#f59e0b;color:white}
     .btn-red{background:#dc2626;color:white}
+    .btn-blue{background:#2563eb;color:white}
+    .btn-green{background:#059669;color:white}
 
     @media(max-width:700px){
         .wrap{padding:18px}
@@ -119,26 +142,38 @@
 
     <div class="hero">
         <h1>Doctor Details</h1>
-        <p>View complete doctor profile information.</p>
+        <p>View complete doctor profile information with secure photo and CV access.</p>
     </div>
 
     @php
         $name = $doctor->name ?? 'Unknown Doctor';
         $specialist = $doctor->specialist ?? $doctor->specialization ?? 'Specialist N/A';
+
+        $doctorPhoto = $doctor->profile_photo ?? optional($doctor->user)->profile_photo;
+        $doctorCv = $doctor->cv ?? null;
     @endphp
 
     <div class="card">
 
         <div class="top">
-            <div class="avatar">{{ strtoupper(substr($name,0,1)) }}</div>
+            <div class="avatar">
+                @if($doctorPhoto)
+                    <img src="{{ route('secure.file.show', [
+                        'folder' => 'doctor-photos',
+                        'filename' => basename($doctorPhoto)
+                    ]) }}" alt="Doctor Photo">
+                @else
+                    {{ strtoupper(substr($name,0,1)) }}
+                @endif
+            </div>
 
             <div>
                 <h2 class="name">Dr. {{ $name }}</h2>
                 <div class="spec">{{ $specialist }}</div>
+                <div class="secure-badge">🔐 Private file access active</div>
             </div>
         </div>
-
-        <div class="grid">
+                <div class="grid">
 
             <div class="box">
                 <div class="label">Doctor ID</div>
@@ -170,11 +205,48 @@
                 <div class="value">{{ ucfirst($doctor->verification_status ?? 'pending') }}</div>
             </div>
 
+            <div class="box">
+                <div class="label">CV Status</div>
+                <div class="value">
+                    @if($doctorCv)
+                        Encrypted CV Available
+                    @else
+                        No CV Uploaded
+                    @endif
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="label">Storage</div>
+                <div class="value">Private Encrypted Storage</div>
+            </div>
+
         </div>
 
         <div class="actions">
             <a href="{{ route('doctors.index') }}" class="btn btn-gray">← Back</a>
-            <a href="{{ route('doctors.edit', $doctor->id) }}" class="btn btn-yellow">Edit</a>
+
+            <a href="{{ route('doctors.edit', $doctor->id) }}" class="btn btn-yellow">
+                Edit
+            </a>
+
+            @if($doctorCv)
+                <a href="{{ route('secure.file.download', [
+                    'folder' => 'doctor-cvs',
+                    'filename' => basename($doctorCv)
+                ]) }}" class="btn btn-blue">
+                    Download CV
+                </a>
+            @endif
+
+            @if($doctorPhoto)
+                <a href="{{ route('secure.file.show', [
+                    'folder' => 'doctor-photos',
+                    'filename' => basename($doctorPhoto)
+                ]) }}" target="_blank" class="btn btn-green">
+                    View Photo
+                </a>
+            @endif
 
             <form action="{{ route('doctors.destroy', $doctor->id) }}"
                   method="POST"

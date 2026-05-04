@@ -2,13 +2,19 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MedicalDocument extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'user_id',
         'document_type',
+        'doctor_name',
+        'hospital_name',
         'title',
         'encrypted_name',
         'original_name',
@@ -16,39 +22,44 @@ class MedicalDocument extends Model
         'storage_path',
         'file_type',
         'file_size',
+        'encryption_mode',
         'notes',
         'document_date',
-        'encryption_mode',
+        'salt',
+        'iv',
+        'tag',
+        'auth_tag',
+        'key_hint',
+        'privacy_key_hint',
     ];
 
     protected $casts = [
         'document_date' => 'date',
+        'file_size' => 'integer',
     ];
 
-    protected $hidden = [
-        'storage_path',
-        'encrypted_name',
-    ];
-
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | IMPORTANT
-    |--------------------------------------------------------------------------
-    | No public URL for medical documents.
-    | Files must be downloaded only through secure controller route.
-    */
-    public function getFileUrlAttribute()
+    public function getSecureFilePathAttribute(): ?string
     {
-        return null;
+        return $this->storage_path;
     }
 
-    public function getSecureDownloadUrlAttribute()
+    public function getPrettySizeAttribute(): string
     {
-        return route('medical-documents.download', $this);
+        $bytes = (int) ($this->file_size ?? 0);
+
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 2) . ' MB';
+        }
+
+        if ($bytes >= 1024) {
+            return round($bytes / 1024, 2) . ' KB';
+        }
+
+        return $bytes . ' B';
     }
 }

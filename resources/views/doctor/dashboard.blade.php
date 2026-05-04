@@ -3,6 +3,7 @@
 
     <div class="max-w-7xl mx-auto space-y-8">
 
+        {{-- HEADER --}}
         <div class="bg-white/10 border border-white/10 rounded-3xl p-8 shadow-2xl text-white">
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <div>
@@ -19,27 +20,7 @@
                     </p>
                 </div>
 
-                <div class="flex gap-3 flex-wrap">
-                    <a href="{{ route('profile.edit') }}"
-                       class="px-5 py-3 rounded-2xl bg-emerald-600 text-white font-bold">
-                        Update Profile
-                    </a>
-
-                    <a href="{{ route('appointments.index') }}"
-                       class="px-5 py-3 rounded-2xl bg-white/10 text-white font-bold border border-white/10">
-                        View Appointments
-                    </a>
-
-                    <a href="{{ route('prescriptions.create') }}"
-                       class="px-5 py-3 rounded-2xl bg-blue-600 text-white font-bold">
-                        Create Prescription
-                    </a>
-
-                    <a href="{{ route('doctor.search.patient') }}"
-                       class="px-5 py-3 rounded-2xl bg-purple-600 text-white font-bold">
-                        Search Patient
-                    </a>
-                </div>
+                {{-- ❌ Buttons removed --}}
             </div>
         </div>
 
@@ -49,6 +30,7 @@
             </div>
         @endif
 
+        {{-- STATS --}}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
 
             <div class="p-6 rounded-3xl bg-white/10 border border-white/10 shadow-xl">
@@ -83,6 +65,7 @@
 
         </div>
 
+        {{-- QUICK ACTION CARDS --}}
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
             <a href="{{ route('appointments.index') }}" class="bg-white/10 border border-white/10 p-7 rounded-3xl shadow-xl hover:scale-[1.02] transition text-white">
@@ -117,6 +100,7 @@
 
         </div>
 
+        {{-- APPOINTMENTS --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
             <div class="bg-white/10 border border-white/10 rounded-3xl p-6 shadow-2xl">

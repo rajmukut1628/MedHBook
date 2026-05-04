@@ -5,11 +5,36 @@ namespace App\Http\Controllers;
 use App\Models\Doctor;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class DoctorController extends Controller
 {
+    private string $disk = 'local';
+
+    private function encryptUpload($file, string $folder, string $prefix): string
+    {
+        $fileName = $prefix . '_' . time() . '_' . Str::random(20) . '.mhb';
+
+        $path = $folder . '/' . $fileName;
+
+        $content = file_get_contents($file->getRealPath());
+        $encrypted = Crypt::encryptString(base64_encode($content));
+
+        Storage::disk($this->disk)->put($path, $encrypted);
+
+        return $path;
+    }
+
+    private function deletePrivateFile(?string $path): void
+    {
+        if ($path && Storage::disk($this->disk)->exists($path)) {
+            Storage::disk($this->disk)->delete($path);
+        }
+    }
+
     public function index()
     {
         $query = Doctor::with('user')->latest();
@@ -105,9 +130,31 @@ class DoctorController extends Controller
             'license_number' => ['nullable', 'string', 'max:255'],
             'chamber_address' => ['nullable', 'string'],
             'password' => ['required', 'min:6'],
+
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cv' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $email = strtolower($request->email);
+
+        $profilePhotoPath = null;
+        $cvPath = null;
+
+        if ($request->hasFile('profile_photo')) {
+            $profilePhotoPath = $this->encryptUpload(
+                $request->file('profile_photo'),
+                'private/doctor-photos/user-new',
+                'doctor_photo'
+            );
+        }
+
+        if ($request->hasFile('cv')) {
+            $cvPath = $this->encryptUpload(
+                $request->file('cv'),
+                'private/doctor-cvs',
+                'doctor_cv'
+            );
+        }
 
         $user = User::create([
             'name' => $request->name,
@@ -116,7 +163,18 @@ class DoctorController extends Controller
             'password' => Hash::make($request->password),
             'role' => 'doctor',
             'status' => 'active',
+            'profile_photo' => $profilePhotoPath,
         ]);
+
+        if ($profilePhotoPath) {
+            $newPath = str_replace('user-new', 'user-' . $user->id, $profilePhotoPath);
+
+            Storage::disk($this->disk)->makeDirectory(dirname($newPath));
+            Storage::disk($this->disk)->move($profilePhotoPath, $newPath);
+
+            $profilePhotoPath = $newPath;
+            $user->update(['profile_photo' => $profilePhotoPath]);
+        }
 
         Doctor::create([
             'user_id' => $user->id,
@@ -130,14 +188,15 @@ class DoctorController extends Controller
             'experience' => $request->experience ?? 0,
             'license_number' => $request->license_number,
             'chamber_address' => $request->chamber_address,
+            'profile_photo' => $profilePhotoPath,
+            'cv' => $cvPath,
             'verification_status' => 'approved',
         ]);
 
         return redirect()->route('doctors.index')
-            ->with('success', 'Doctor account created successfully. Doctor can login using email and password.');
+            ->with('success', 'Doctor account created successfully.');
     }
-
-    public function show(Doctor $doctor)
+        public function show(Doctor $doctor)
     {
         $doctor->load('user');
 
@@ -152,70 +211,85 @@ class DoctorController extends Controller
     }
 
     public function update(Request $request, Doctor $doctor)
-{
-    $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'phone' => ['required', 'string', 'max:20'],
-        'specialist' => ['required', 'string', 'max:255'],
-        'degree' => ['nullable', 'string', 'max:255'],
-        'qualification' => ['nullable', 'string', 'max:255'],
-        'experience' => ['nullable', 'integer', 'min:0'],
-    ]);
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:20'],
+            'specialist' => ['required', 'string', 'max:255'],
+            'degree' => ['nullable', 'string', 'max:255'],
+            'qualification' => ['nullable', 'string', 'max:255'],
+            'experience' => ['nullable', 'integer', 'min:0'],
 
-    /*
-    |--------------------------------------------------------------------------
-    | MULTI CHAMBER PROCESSING 🔥
-    |--------------------------------------------------------------------------
-    */
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cv' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
 
-    $chambers = [];
+        $chambers = [];
 
-    if ($request->has('chambers')) {
-        foreach ($request->chambers as $chamber) {
-
-            if (!empty($chamber['address'])) {
-                $chambers[] = [
-                    'address' => $chamber['address'],
-                    'working_days' => $chamber['working_days'] ?? [],
-                    'start_time' => $chamber['start_time'] ?? null,
-                    'end_time' => $chamber['end_time'] ?? null,
-                    'fee' => $chamber['fee'] ?? 0,
-                ];
+        if ($request->has('chambers')) {
+            foreach ($request->chambers as $chamber) {
+                if (!empty($chamber['address'])) {
+                    $chambers[] = [
+                        'address' => $chamber['address'],
+                        'working_days' => $chamber['working_days'] ?? [],
+                        'start_time' => $chamber['start_time'] ?? null,
+                        'end_time' => $chamber['end_time'] ?? null,
+                        'fee' => $chamber['fee'] ?? 0,
+                    ];
+                }
             }
         }
-    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | SAVE DATA
-    |--------------------------------------------------------------------------
-    */
+        $profilePhotoPath = $doctor->profile_photo;
+        $cvPath = $doctor->cv;
 
-    $doctor->update([
-        'name' => $request->name,
-        'phone' => $request->phone,
-        'specialist' => $request->specialist,
-        'specialization' => $request->specialist,
-        'degree' => $request->degree,
-        'qualification' => $request->qualification,
-        'experience' => $request->experience ?? 0,
+        if ($request->hasFile('profile_photo')) {
+            $this->deletePrivateFile($profilePhotoPath);
 
-        // 🔥 NEW FIELD (JSON)
-        'chambers' => $chambers,
+            $profilePhotoPath = $this->encryptUpload(
+                $request->file('profile_photo'),
+                'private/doctor-photos/user-' . $doctor->user_id,
+                'doctor_photo'
+            );
+        }
 
-        // backward compatibility
-        'chamber_address' => collect($chambers)->pluck('address')->implode("\n"),
-    ]);
+        if ($request->hasFile('cv')) {
+            $this->deletePrivateFile($cvPath);
 
-    if ($doctor->user) {
-        $doctor->user->update([
+            $cvPath = $this->encryptUpload(
+                $request->file('cv'),
+                'private/doctor-cvs',
+                'doctor_cv'
+            );
+        }
+
+        $doctor->update([
             'name' => $request->name,
-        ]);
-    }
+            'phone' => $request->phone,
+            'specialist' => $request->specialist,
+            'specialization' => $request->specialist,
+            'degree' => $request->degree,
+            'qualification' => $request->qualification,
+            'experience' => $request->experience ?? 0,
 
-    return redirect()->route('profile.edit')
-    ->with('success', 'Doctor profile and chambers updated successfully.');
-}
+            'chambers' => $chambers,
+            'chamber_address' => collect($chambers)->pluck('address')->implode("\n"),
+
+            'profile_photo' => $profilePhotoPath,
+            'cv' => $cvPath,
+        ]);
+
+        if ($doctor->user) {
+            $doctor->user->update([
+                'name' => $request->name,
+                'profile_photo' => $profilePhotoPath,
+            ]);
+        }
+
+        return redirect()
+            ->route('profile.edit')
+            ->with('success', 'Doctor profile, encrypted photo, encrypted CV, and chambers updated successfully.');
+    }
 
     public function updateSchedule(Request $request)
     {
@@ -223,7 +297,7 @@ class DoctorController extends Controller
             'chamber_addresses' => ['nullable', 'string'],
             'working_days' => ['required', 'array'],
             'start_time' => ['required'],
-            'end_time' => ['required'],
+            'end_time' => ['required', 'after:start_time'],
             'consultation_fee' => ['required', 'numeric', 'min:0'],
         ]);
 
@@ -258,6 +332,7 @@ class DoctorController extends Controller
             'experience' => ['nullable', 'integer', 'min:0'],
             'bio' => ['nullable', 'string', 'max:2000'],
             'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'cv' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $doctor = Doctor::where('user_id', auth()->id())
@@ -269,9 +344,26 @@ class DoctorController extends Controller
         }
 
         $photoPath = $doctor->profile_photo;
+        $cvPath = $doctor->cv;
 
         if ($request->hasFile('profile_photo')) {
-            $photoPath = $request->file('profile_photo')->store('doctor-profiles', 'public');
+            $this->deletePrivateFile($photoPath);
+
+            $photoPath = $this->encryptUpload(
+                $request->file('profile_photo'),
+                'private/doctor-photos/user-' . auth()->id(),
+                'doctor_photo'
+            );
+        }
+
+        if ($request->hasFile('cv')) {
+            $this->deletePrivateFile($cvPath);
+
+            $cvPath = $this->encryptUpload(
+                $request->file('cv'),
+                'private/doctor-cvs',
+                'doctor_cv'
+            );
         }
 
         $doctor->update([
@@ -285,9 +377,16 @@ class DoctorController extends Controller
             'experience' => $request->experience ?? 0,
             'bio' => $request->bio,
             'profile_photo' => $photoPath,
+            'cv' => $cvPath,
         ]);
 
-        return back()->with('success', 'Doctor profile updated successfully.');
+        if ($doctor->user) {
+            $doctor->user->update([
+                'profile_photo' => $photoPath,
+            ]);
+        }
+
+        return back()->with('success', 'Doctor profile updated with encrypted files successfully.');
     }
 
     public function approve(Doctor $doctor)
@@ -326,12 +425,18 @@ class DoctorController extends Controller
 
     public function destroy(Doctor $doctor)
     {
+        $this->deletePrivateFile($doctor->profile_photo);
+        $this->deletePrivateFile($doctor->cv);
+
         if ($doctor->user) {
+            $this->deletePrivateFile($doctor->user->profile_photo);
             $doctor->user->delete();
         }
 
         $doctor->delete();
 
-        return redirect()->route('doctors.index')->with('success', 'Doctor deleted successfully.');
+        return redirect()
+            ->route('doctors.index')
+            ->with('success', 'Doctor deleted successfully.');
     }
 }

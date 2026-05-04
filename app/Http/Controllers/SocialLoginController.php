@@ -12,10 +12,8 @@ use Laravel\Socialite\Facades\Socialite;
 
 class SocialLoginController extends Controller
 {
-    public function redirectToGoogle(Request $request)
+    public function redirectToGoogle($role = 'patient')
     {
-        $role = $request->query('role', 'patient');
-
         if (!in_array($role, ['patient', 'doctor'])) {
             $role = 'patient';
         }
@@ -94,6 +92,10 @@ class SocialLoginController extends Controller
         $googleId = $firebaseUser['localId'] ?? null;
         $avatar = $firebaseUser['photoUrl'] ?? null;
         $role = $request->role ?? 'patient';
+
+        if (!in_array($role, ['patient', 'doctor'])) {
+            $role = 'patient';
+        }
 
         $user = User::where('email', $email)->first();
 

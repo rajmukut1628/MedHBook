@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\DoctorController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\DoctorDashboardController;
 use App\Http\Controllers\SocialLoginController;
 use App\Http\Controllers\PrescriptionController;
 use App\Http\Controllers\PatientSettingsController;
+use App\Http\Controllers\FirebaseAuthController;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -30,12 +32,21 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
-| Google Login
+| Google / Firebase Login
 |--------------------------------------------------------------------------
 */
+Route::get('/auth/google/{role?}', [SocialLoginController::class, 'redirectToGoogle'])
+    ->name('google.redirect');
 
-Route::get('/auth/google', [SocialLoginController::class, 'redirectToGoogle'])->name('google.login');
-Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])->name('google.callback');
+Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])
+    ->name('google.callback');
+
+Route::post('/firebase/google-login', [FirebaseAuthController::class, 'login'])
+    ->name('firebase.google.login');
+
+    Route::get('/google-config-test', function () {
+    dd(config('services.google'));
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -44,65 +55,6 @@ Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogle
 */
 
 Route::middleware(['auth', 'check.status'])->group(function () {
-        /*
-    |--------------------------------------------------------------------------
-    | Profile Settings Pages
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/profile/doctor/edit', function () {
-        return view('profile.doctor-edit');
-    })->middleware('role:doctor')->name('profile.doctor.edit');
-
-    Route::get('/profile/info', function () {
-        return view('profile.edit-info', [
-            'user' => auth()->user()
-        ]);
-    })->name('profile.info.edit');
-
-    Route::get('/profile/password', function () {
-        return view('profile.change-password');
-    })->name('profile.password.edit');
-
-    Route::get('/profile/delete', function () {
-        return view('profile.delete');
-    })->name('profile.delete.confirm');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Doctor Public Profile
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/doctor-profile/{doctor}', [DoctorController::class, 'publicProfile'])
-        ->name('doctor.public.profile');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Resources
-    |--------------------------------------------------------------------------
-    */
-
-    Route::resource('patients', PatientController::class);
-    Route::resource('doctors', DoctorController::class);
-
-    // 🔐 Medical documents secured by controller ownership check
-    Route::resource('medical-documents', MedicalDocumentController::class);
-
-    Route::resource('appointments', AppointmentController::class);
-    Route::resource('prescriptions', PrescriptionController::class);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Secure Download Routes
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
-        ->name('medical-documents.download');
-
-    Route::get('/prescriptions/{prescription}/download', [PrescriptionController::class, 'downloadPdf'])
-        ->name('prescriptions.download');
 
     /*
     |--------------------------------------------------------------------------
@@ -127,7 +79,110 @@ Route::middleware(['auth', 'check.status'])->group(function () {
 
         return redirect()->route('patient.dashboard');
     })->name('dashboard');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Profile Settings Pages
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/profile/doctor/edit', function () {
+        return view('profile.doctor-edit');
+    })->middleware('role:doctor')->name('profile.doctor.edit');
+
+    Route::get('/profile/info', function () {
+        return view('profile.edit-info', [
+            'user' => auth()->user(),
+        ]);
+    })->name('profile.info.edit');
+
+    Route::get('/profile/password', function () {
+        return view('profile.change-password');
+    })->name('profile.password.edit');
+
+    Route::get('/profile/delete', function () {
+        return view('profile.delete');
+    })->name('profile.delete.confirm');
         /*
+    |--------------------------------------------------------------------------
+    | Doctor Public Profile
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/doctor-profile/{doctor}', [DoctorController::class, 'publicProfile'])
+        ->name('doctor.public.profile');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Main Resources
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource('patients', PatientController::class);
+    Route::resource('doctors', DoctorController::class);
+    Route::resource('appointments', AppointmentController::class);
+    Route::resource('prescriptions', PrescriptionController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Advanced E2EE Medical Documents Routes
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware(['auth', 'check.status', 'role:patient'])->group(function () {
+    Route::resource('medical-documents', MedicalDocumentController::class);
+
+    Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
+        ->name('medical-documents.download');
+
+    Route::get('/medical-documents/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
+        ->name('medical-documents.metadata');
+});
+Route::middleware(['auth'])->group(function () {
+    Route::get('/private-file/{folder}/{filename}', [PrivateFileController::class, 'show'])
+        ->where('filename', '.*')
+        ->name('private.file.show');
+
+    Route::get('/private-file-download/{folder}/{filename}', [PrivateFileController::class, 'download'])
+        ->where('filename', '.*')
+        ->name('private.file.download');
+});
+
+
+    Route::prefix('medical-documents')
+        ->name('medical-documents.')
+        ->group(function () {
+
+            Route::get('/', [MedicalDocumentController::class, 'index'])
+                ->name('index');
+
+            Route::get('/create', [MedicalDocumentController::class, 'create'])
+                ->name('create');
+
+            Route::post('/', [MedicalDocumentController::class, 'store'])
+                ->name('store');
+
+            Route::get('/{medicalDocument}', [MedicalDocumentController::class, 'show'])
+                ->name('show');
+
+            Route::get('/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
+                ->name('download');
+
+            Route::get('/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
+                ->name('metadata');
+
+            Route::delete('/{medicalDocument}', [MedicalDocumentController::class, 'destroy'])
+                ->name('destroy');
+        });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prescription Secure Download
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/prescriptions/{prescription}/download', [PrescriptionController::class, 'downloadPdf'])
+        ->name('prescriptions.download');
+            /*
     |--------------------------------------------------------------------------
     | Patient Routes
     |--------------------------------------------------------------------------
@@ -195,8 +250,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     Route::post('/doctor/schedule/update', [DoctorController::class, 'updateSchedule'])
         ->middleware('role:doctor')
         ->name('doctor.schedule.update');
-
-    /*
+            /*
     |--------------------------------------------------------------------------
     | Appointment Actions
     |--------------------------------------------------------------------------
@@ -213,7 +267,8 @@ Route::middleware(['auth', 'check.status'])->group(function () {
 
     Route::patch('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule'])
         ->name('appointments.reschedule');
-            /*
+
+    /*
     |--------------------------------------------------------------------------
     | Admin Dashboard
     |--------------------------------------------------------------------------
@@ -233,6 +288,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     */
 
     Route::middleware('role:admin,super_admin')->group(function () {
+
         Route::post('/doctors/{doctor}/approve', [DoctorController::class, 'approve'])
             ->name('doctors.approve');
 
@@ -240,6 +296,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
             ->name('doctors.reject');
 
         Route::patch('/admin/users/{user}/suspend', function (Request $request, User $user) {
+
             $request->validate([
                 'duration_type'  => 'required|in:days,months',
                 'duration'       => 'required|integer|min:1|max:365',
@@ -264,6 +321,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
         })->name('admin.users.suspend');
 
         Route::patch('/admin/users/{user}/unsuspend', function (User $user) {
+
             if (!in_array($user->role, ['patient', 'doctor'])) {
                 return back()->with('error', 'Only patient or doctor can be unsuspended.');
             }
@@ -285,6 +343,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     */
 
     Route::middleware('role:super_admin')->group(function () {
+
         Route::get('/superadmin/dashboard', function () {
             return view('superadmin.dashboard', [
                 'users' => User::count(),
@@ -304,6 +363,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
         })->name('superadmin.admin.create');
 
         Route::post('/superadmin/admins', function (Request $request) {
+
             $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email',
@@ -330,6 +390,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
         })->name('superadmin.admin.edit');
 
         Route::put('/superadmin/admins/{id}', function (Request $request, $id) {
+
             $admin = User::where('role', 'admin')->findOrFail($id);
 
             $request->validate([
@@ -356,6 +417,7 @@ Route::middleware(['auth', 'check.status'])->group(function () {
         })->name('superadmin.admin.update');
 
         Route::delete('/superadmin/admins/{id}', function ($id) {
+
             $admin = User::where('role', 'admin')->findOrFail($id);
             $admin->delete();
 
@@ -378,6 +440,19 @@ Route::middleware(['auth', 'check.status'])->group(function () {
 
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
+
+}); // END AUTH GROUP
+
+Route::middleware(['auth'])->group(function () {
+
+    Route::get('/secure-file/{folder}/{filename}', [PrivateFileController::class, 'show'])
+        ->where('filename', '.*')
+        ->name('secure.file.show');
+
+    Route::get('/secure-file-download/{folder}/{filename}', [PrivateFileController::class, 'download'])
+        ->where('filename', '.*')
+        ->name('secure.file.download');
+
 });
 
 require __DIR__ . '/auth.php';

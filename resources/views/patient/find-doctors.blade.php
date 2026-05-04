@@ -225,25 +225,37 @@ body{
                     <div class="info">
                         <div><strong>Phone:</strong> {{ $doctor->phone ?? 'N/A' }}</div>
 
-                        <div>
-                            <strong>Chamber:</strong>
-                            {{ Str::limit($doctor->chamber_addresses ?? $doctor->chamber_address ?? 'N/A', 40) }}
-                        </div>
+                       @php
+    $chambers = $doctor->display_chambers ?? [];
+    $firstChamber = $chambers[0] ?? null;
+@endphp
 
-                        <div>
-                            <strong>Days:</strong>
-                            {{ is_array($doctor->working_days) ? implode(', ', $doctor->working_days) : 'Not Added' }}
-                        </div>
+@if($firstChamber)
+    <div>
+        <strong>Chamber:</strong>
+        {{ Str::limit($firstChamber['address'] ?? 'N/A', 40) }}
+    </div>
 
-                        <div>
-                            <strong>Time:</strong>
-                            {{ $doctor->start_time ?? '--' }} - {{ $doctor->end_time ?? '--' }}
-                        </div>
+    <div>
+        <strong>Days:</strong>
+        {{ !empty($firstChamber['working_days']) ? implode(', ', $firstChamber['working_days']) : 'Not Added' }}
+    </div>
 
-                        <div>
-                            <strong>Fee:</strong>
-                            ৳ {{ $doctor->consultation_fee ?? 0 }}
-                        </div>
+    <div>
+        <strong>Time:</strong>
+        {{ $firstChamber['start_time'] ?? '--' }} - {{ $firstChamber['end_time'] ?? '--' }}
+    </div>
+
+    <div>
+        <strong>Fee:</strong>
+        ৳ {{ $firstChamber['fee'] ?? 0 }}
+    </div>
+@else
+    <div><strong>Chamber:</strong> N/A</div>
+    <div><strong>Days:</strong> Not Added</div>
+    <div><strong>Time:</strong> -- - --</div>
+    <div><strong>Fee:</strong> ৳ 0</div>
+@endif
 
                         <div>
                             <strong>Experience:</strong>

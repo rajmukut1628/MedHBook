@@ -1,16 +1,33 @@
 <x-app-layout>
 
 @php
-    $days = [];
+    $chambers = [];
 
     if (isset($selectedDoctor) && $selectedDoctor) {
-        $days = is_array($selectedDoctor->working_days)
-            ? $selectedDoctor->working_days
-            : [];
+        $chambers = $selectedDoctor->display_chambers ?? [];
     }
 
-    $startTime = $selectedDoctor->start_time ?? '';
-    $endTime = $selectedDoctor->end_time ?? '';
+    $selectedChamberAddress = old('chamber_address', request('chamber_address'));
+
+    $selectedChamber = null;
+
+    if (!empty($chambers)) {
+        foreach ($chambers as $chamber) {
+            if (($chamber['address'] ?? '') === $selectedChamberAddress) {
+                $selectedChamber = $chamber;
+                break;
+            }
+        }
+
+        if (!$selectedChamber) {
+            $selectedChamber = $chambers[0] ?? null;
+        }
+    }
+
+    $days = $selectedChamber['working_days'] ?? [];
+    $startTime = $selectedChamber['start_time'] ?? '';
+    $endTime = $selectedChamber['end_time'] ?? '';
+    $fee = $selectedChamber['fee'] ?? 0;
 @endphp
 
 <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 py-10 px-4 sm:px-6 lg:px-8">
@@ -24,7 +41,7 @@
             <h1 class="text-4xl font-black text-white">Book Appointment</h1>
 
             <p class="text-slate-300 mt-2">
-                Select doctor, date, and available 5-minute time slot.
+                Select doctor, chamber, date, and available 5-minute time slot.
             </p>
         </div>
 
@@ -49,8 +66,7 @@
                 </ul>
             </div>
         @endif
-
-        <div class="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
+                <div class="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
 
             <div class="px-6 py-5 border-b border-white/10">
                 <h2 class="text-xl font-black text-white">
@@ -61,6 +77,7 @@
             <form action="{{ route('appointments.store') }}" method="POST" class="p-6 space-y-6">
                 @csrf
 
+                {{-- Doctor Select --}}
                 <div>
                     <label class="block text-sm font-bold text-white mb-2">
                         Doctor
@@ -90,29 +107,50 @@
                             Doctor Schedule
                         </h3>
 
-                        <div class="space-y-2 text-slate-200 text-sm">
+                        <div class="space-y-4 text-slate-200 text-sm">
                             <p><strong>Name:</strong> {{ $selectedDoctor->name }}</p>
                             <p><strong>Specialist:</strong> {{ $selectedDoctor->specialist ?? $selectedDoctor->specialization }}</p>
 
-                            <p>
-                                <strong>Chamber:</strong><br>
-                                {!! nl2br(e($selectedDoctor->chamber_addresses ?? $selectedDoctor->chamber_address ?? 'Not Added')) !!}
-                            </p>
+                            {{-- Chamber Select --}}
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    Select Chamber
+                                </label>
 
-                            <p>
-                                <strong>Working Days:</strong>
-                                {{ count($days) ? implode(', ', $days) : 'Not Added' }}
-                            </p>
+                                <select name="chamber_address"
+                                        id="chamber_address"
+                                        required
+                                        onchange="reloadSlots()"
+                                        class="w-full rounded-2xl bg-slate-800 border-white/20 text-white px-4 py-3">
 
-                            <p>
-                                <strong>Available Time:</strong>
-                                {{ $startTime ?: 'Not Set' }} - {{ $endTime ?: 'Not Set' }}
-                            </p>
+                                    <option value="">Select Chamber</option>
 
-                            <p>
-                                <strong>Fee:</strong>
-                                ৳ {{ $selectedDoctor->consultation_fee ?? 0 }}
-                            </p>
+                                    @foreach($chambers as $chamber)
+                                        <option value="{{ $chamber['address'] }}"
+                                            {{ $selectedChamberAddress === ($chamber['address'] ?? '') ? 'selected' : '' }}>
+                                            {{ $chamber['address'] }} — ৳ {{ $chamber['fee'] ?? 0 }}
+                                        </option>
+                                    @endforeach
+
+                                </select>
+                            </div>
+
+                            <div class="rounded-2xl bg-slate-950/40 border border-white/10 p-4 space-y-2">
+                                <p>
+                                    <strong>Working Days:</strong>
+                                    {{ count($days) ? implode(', ', $days) : 'Not Added' }}
+                                </p>
+
+                                <p>
+                                    <strong>Available Time:</strong>
+                                    {{ $startTime ?: 'Not Set' }} - {{ $endTime ?: 'Not Set' }}
+                                </p>
+
+                                <p>
+                                    <strong>Fee:</strong>
+                                    ৳ {{ $fee }}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 @endif
@@ -125,16 +163,14 @@
                         </label>
 
                         <input type="date"
-                               id="appointment_date"
-                               name="appointment_date"
-                               min="{{ date('Y-m-d') }}"
-                               value="{{ old('appointment_date', request('appointment_date')) }}"
-                               onchange="reloadSlots()"
-                               required
-                               class="w-full rounded-2xl bg-white/10 border-white/20 text-white px-4 py-3">
+       id="appointment_date"
+       name="appointment_date"
+       min="{{ date('Y-m-d') }}"
+       value="{{ old('appointment_date', request('appointment_date')) }}"
+       required
+       class="w-full rounded-2xl bg-white/10 border-white/20 text-white px-4 py-3">
                     </div>
-
-                    <div>
+                                        <div>
                         <label class="block text-sm font-bold text-white mb-2">
                             Select 5-Minute Slot
                         </label>
@@ -211,31 +247,58 @@
     const dayWarning = document.getElementById('dayWarning');
     const submitBtn = document.getElementById('submitBtn');
 
-    function reloadSlots() {
-        const doctorId = document.getElementById('doctor_id').value;
-        const date = document.getElementById('appointment_date').value;
-
-        if (doctorId && date) {
-            window.location.href = "{{ route('appointments.create') }}" + "?doctor_id=" + doctorId + "&appointment_date=" + date;
-        } else if (doctorId) {
-            window.location.href = "{{ route('appointments.create') }}" + "?doctor_id=" + doctorId;
-        }
+    if (dayWarning) {
+        dayWarning.classList.add('hidden');
     }
 
-    dateInput?.addEventListener('change', function () {
-        if (!this.value) return;
+    function checkSelectedDay() {
+        if (!dateInput || !dateInput.value) {
+            dayWarning.classList.add('hidden');
+            submitBtn.disabled = false;
+            return false;
+        }
 
-        const selected = new Date(this.value);
+        const selected = new Date(dateInput.value + 'T00:00:00');
         const dayName = selected.toLocaleDateString('en-US', { weekday: 'long' });
 
         if (allowedDays.length > 0 && !allowedDays.includes(dayName)) {
             dayWarning.classList.remove('hidden');
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        } else {
-            dayWarning.classList.add('hidden');
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            return false;
+        }
+
+        dayWarning.classList.add('hidden');
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        return true;
+    }
+
+    function reloadSlots() {
+        const doctorId = document.getElementById('doctor_id')?.value;
+        const date = document.getElementById('appointment_date')?.value;
+        const chamber = document.getElementById('chamber_address')?.value;
+
+        if (!doctorId) return;
+
+        let url = "{{ route('appointments.create') }}?doctor_id=" + encodeURIComponent(doctorId);
+
+        if (date) {
+            url += "&appointment_date=" + encodeURIComponent(date);
+        }
+
+        if (chamber) {
+            url += "&chamber_address=" + encodeURIComponent(chamber);
+        }
+
+        window.location.href = url;
+    }
+
+    dateInput?.addEventListener('change', function () {
+        const isAvailable = checkSelectedDay();
+
+        if (isAvailable) {
+            reloadSlots();
         }
     });
 </script>

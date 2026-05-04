@@ -6,11 +6,36 @@ use App\Models\User;
 use App\Models\Patient;
 use App\Models\Doctor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class PatientController extends Controller
 {
+    private string $disk = 'local';
+
+    private function encryptUpload($file, string $folder, string $prefix): string
+    {
+        $fileName = $prefix . '_' . time() . '_' . Str::random(20) . '.mhb';
+
+        $path = $folder . '/' . $fileName;
+
+        $content = file_get_contents($file->getRealPath());
+        $encrypted = Crypt::encryptString(base64_encode($content));
+
+        Storage::disk($this->disk)->put($path, $encrypted);
+
+        return $path;
+    }
+
+    private function deletePrivateFile(?string $path): void
+    {
+        if ($path && Storage::disk($this->disk)->exists($path)) {
+            Storage::disk($this->disk)->delete($path);
+        }
+    }
+
     public function index()
     {
         $patients = Patient::with('user')->latest()->get();
@@ -98,8 +123,7 @@ class PatientController extends Controller
 
         return view('patients.edit', compact('patient'));
     }
-
-    public function update(Request $request, $id)
+        public function update(Request $request, $id)
     {
         $patient = Patient::with('user')->findOrFail($id);
 
@@ -170,11 +194,13 @@ class PatientController extends Controller
         $photoPath = $patient->profile_photo;
 
         if ($request->hasFile('profile_photo')) {
-            if ($patient->profile_photo) {
-                Storage::disk('public')->delete($patient->profile_photo);
-            }
+            $this->deletePrivateFile($photoPath);
 
-            $photoPath = $request->file('profile_photo')->store('patient-profiles', 'public');
+            $photoPath = $this->encryptUpload(
+                $request->file('profile_photo'),
+                'private/patient-profiles/user-' . auth()->id(),
+                'patient_photo'
+            );
         }
 
         $patient->update([
@@ -194,6 +220,7 @@ class PatientController extends Controller
 
         auth()->user()->update([
             'name' => $request->name,
+            'profile_photo' => $photoPath,
         ]);
 
         return back()->with('success', 'Patient profile updated successfully.');
@@ -220,11 +247,10 @@ class PatientController extends Controller
     {
         $patient = Patient::findOrFail($id);
 
-        if ($patient->profile_photo) {
-            Storage::disk('public')->delete($patient->profile_photo);
-        }
+        $this->deletePrivateFile($patient->profile_photo);
 
         if ($patient->user) {
+            $this->deletePrivateFile($patient->user->profile_photo);
             $patient->user->delete();
         }
 

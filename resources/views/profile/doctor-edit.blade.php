@@ -6,6 +6,9 @@
             ->orWhere('email', auth()->user()->email)
             ->first();
 
+        $doctorPhoto = $doctor->profile_photo ?? null;
+        $doctorCv = $doctor->cv ?? null;
+
         $specialties = [
             'Cardiologist','Neurologist','Medicine','Dermatologist','Orthopedic',
             'Dentist','ENT Specialist','Gynecologist','Urologist','Pediatrician',
@@ -24,7 +27,9 @@
 
                 <div>
                     <h1 class="text-4xl font-black text-white">Edit Doctor Profile</h1>
-                    <p class="text-slate-300 mt-2">Update your professional information, photo and bio.</p>
+                    <p class="text-slate-300 mt-2">
+                        Update your professional information, encrypted photo and encrypted CV.
+                    </p>
                 </div>
             </div>
         </div>
@@ -32,6 +37,12 @@
         @if(session('success'))
             <div class="mb-6 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-5 py-4 font-bold">
                 {{ session('success') }}
+            </div>
+        @endif
+
+        @if(session('error'))
+            <div class="mb-6 rounded-2xl bg-red-500/20 border border-red-400/30 text-red-200 px-5 py-4 font-bold">
+                {{ session('error') }}
             </div>
         @endif
 
@@ -55,8 +66,13 @@
 
                 <div class="lg:col-span-1">
                     <div class="rounded-3xl bg-slate-950/50 border border-white/10 p-6 text-center">
-                        @if($doctor && $doctor->profile_photo)
-                            <img src="{{ asset('storage/' . $doctor->profile_photo) }}"
+
+                        @if($doctorPhoto)
+                            <img src="{{ route('secure.file.show', [
+                                    'folder' => 'doctor-photos',
+                                    'filename' => basename($doctorPhoto)
+                                ]) }}"
+                                 loading="lazy"
                                  class="mx-auto h-36 w-36 rounded-3xl object-cover border-4 border-emerald-400 shadow-xl">
                         @else
                             <div class="mx-auto h-36 w-36 rounded-3xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-5xl font-black shadow-xl">
@@ -74,16 +90,58 @@
 
                         <label class="mt-6 block cursor-pointer rounded-2xl bg-white/10 border border-white/10 px-5 py-4 text-white font-bold hover:bg-white/20 transition">
                             Upload New Photo
-                            <input type="file" name="profile_photo" accept="image/*" class="hidden">
+                            <input type="file"
+                                   name="profile_photo"
+                                   accept="image/jpeg,image/png,image/jpg,image/webp"
+                                   class="hidden">
                         </label>
 
                         <p class="text-xs text-slate-400 mt-3">
-                            JPG, PNG, WEBP accepted. Max 2MB.
+                            JPG, PNG, WEBP accepted. Max 2MB. Stored as encrypted .mhb.
                         </p>
+
+                        <div class="mt-6 rounded-2xl bg-blue-500/10 border border-blue-300/20 p-4">
+                            <h4 class="text-blue-200 font-black">Doctor CV</h4>
+
+                            @if($doctorCv)
+                                <p class="text-slate-300 text-sm mt-2">
+                                    Encrypted CV uploaded.
+                                </p>
+
+                                <a href="{{ route('secure.file.download', [
+                                        'folder' => 'doctor-cvs',
+                                        'filename' => basename($doctorCv)
+                                    ]) }}"
+                                   class="mt-3 inline-block px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition">
+                                    Download Current CV
+                                </a>
+                            @else
+                                <p class="text-slate-400 text-sm mt-2">
+                                    No CV uploaded yet.
+                                </p>
+                            @endif
+
+                            <label class="mt-4 block cursor-pointer rounded-2xl bg-white/10 border border-white/10 px-5 py-4 text-white font-bold hover:bg-white/20 transition">
+                                Upload New CV
+                                <input type="file"
+                                       name="cv"
+                                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                       class="hidden">
+                            </label>
+
+                            <p class="text-xs text-slate-400 mt-3">
+                                PDF, DOC, DOCX, JPG, PNG, WEBP accepted. Max 10MB.
+                            </p>
+                        </div>
+
+                        <div class="mt-5 rounded-2xl bg-emerald-500/10 border border-emerald-300/20 p-4">
+                            <p class="text-emerald-200 text-sm font-bold">
+                                🔐 Photo and CV will be encrypted before saving to private storage.
+                            </p>
+                        </div>
                     </div>
                 </div>
-
-                <div class="lg:col-span-2 space-y-5">
+                                <div class="lg:col-span-2 space-y-5">
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
