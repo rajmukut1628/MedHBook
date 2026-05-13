@@ -1,10 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-
 use App\Models\Doctor;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -147,27 +147,70 @@ class DoctorController extends Controller
         return $query;
     }
 
-    public function index()
-    {
-        $query = Doctor::with('user')->latest();
+    public function index(Request $request)
+{
+    $query = Doctor::with('user')->latest();
 
-        if (request('search')) {
-            $search = request('search');
+    if ($request->filled('search')) {
+        $search = trim($request->search);
 
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'LIKE', "%{$search}%")
-                    ->orWhere('email', 'LIKE', "%{$search}%")
-                    ->orWhere('phone', 'LIKE', "%{$search}%")
-                    ->orWhere('specialist', 'LIKE', "%{$search}%")
-                    ->orWhere('specialization', 'LIKE', "%{$search}%")
-                    ->orWhere('verification_status', 'LIKE', "%{$search}%");
-            });
-        }
-
-        $doctors = $query->paginate(9);
-
-        return view('doctors.index', compact('doctors'));
+        $query->where(function ($q) use ($search) {
+            $q->where('name', 'LIKE', "%{$search}%")
+                ->orWhere('email', 'LIKE', "%{$search}%")
+                ->orWhere('phone', 'LIKE', "%{$search}%")
+                ->orWhere('specialist', 'LIKE', "%{$search}%")
+                ->orWhere('specialization', 'LIKE', "%{$search}%")
+                ->orWhere('verification_status', 'LIKE', "%{$search}%");
+        });
     }
+
+    if ($request->filled('specialty')) {
+        $specialty = trim($request->specialty);
+
+        $query->where(function ($q) use ($specialty) {
+            $q->where('specialist', $specialty)
+                ->orWhere('specialization', $specialty);
+        });
+    }
+
+    if ($request->filled('status')) {
+        $query->where('verification_status', $request->status);
+    }
+
+    $specialties = Doctor::query()
+    ->select('specialist')
+    ->whereNotNull('specialist')
+    ->where('specialist', '!=', '')
+    ->pluck('specialist')
+    ->merge(
+        Doctor::query()
+            ->select('specialization')
+            ->whereNotNull('specialization')
+            ->where('specialization', '!=', '')
+            ->pluck('specialization')
+    )
+    ->map(fn ($value) => trim($value))
+    ->filter()
+    ->unique()
+    ->sort()
+    ->values();
+
+    $totalDoctors = Doctor::count();
+    $approvedDoctors = Doctor::where('verification_status', 'approved')->count();
+    $pendingDoctors = Doctor::where('verification_status', 'pending')->count();
+    $rejectedDoctors = Doctor::where('verification_status', 'rejected')->count();
+
+    $doctors = $query->paginate(25)->withQueryString();
+
+    return view('doctors.index', compact(
+        'doctors',
+        'specialties',
+        'totalDoctors',
+        'approvedDoctors',
+        'pendingDoctors',
+        'rejectedDoctors'
+    ));
+}
 
     public function findDoctors(Request $request)
     {

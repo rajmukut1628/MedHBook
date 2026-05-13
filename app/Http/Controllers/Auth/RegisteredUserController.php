@@ -21,6 +21,19 @@ class RegisteredUserController extends Controller
         return view('auth.register');
     }
 
+    private function generateUniqueUserId(string $role): string
+    {
+        $prefix = $role === 'doctor' ? 'DOC' : 'PAT';
+
+        do {
+            $id = $prefix . '-' . now()->format('ym') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+        } while (
+            User::where('patient_id', $id)->orWhere('doctor_id', $id)->exists()
+        );
+
+        return $id;
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
@@ -31,11 +44,14 @@ class RegisteredUserController extends Controller
         ]);
 
         $role = $request->role;
+        $generatedId = $this->generateUniqueUserId($role);
 
         $user = User::create([
             'name' => $request->name,
             'email' => strtolower($request->email),
             'role' => $role,
+            'patient_id' => $role === 'patient' ? $generatedId : null,
+            'doctor_id' => $role === 'doctor' ? $generatedId : null,
             'status' => $role === 'doctor' ? 'pending' : 'active',
             'password' => Hash::make($request->password),
         ]);

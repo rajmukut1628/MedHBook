@@ -18,7 +18,6 @@ class PatientController extends Controller
     private function encryptUpload($file, string $folder, string $prefix): string
     {
         $fileName = $prefix . '_' . time() . '_' . Str::random(20) . '.mhb';
-
         $path = $folder . '/' . $fileName;
 
         $content = file_get_contents($file->getRealPath());
@@ -36,14 +35,71 @@ class PatientController extends Controller
         }
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $patients = Patient::with('user')->latest()->get();
+        $query = Patient::query()
+            ->with('user')
+            ->latest('id');
 
-        return view('patients.index', compact('patients'));
+        if ($request->filled('search')) {
+            $search = trim($request->search);
+
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%")
+                    ->orWhere('phone', 'LIKE', "%{$search}%")
+                    ->orWhere('gender', 'LIKE', "%{$search}%")
+                    ->orWhere('blood_group', 'LIKE', "%{$search}%")
+                    ->orWhere('privacy_key', 'LIKE', "%{$search}%")
+                    ->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery->where('name', 'LIKE', "%{$search}%")
+                            ->orWhere('email', 'LIKE', "%{$search}%")
+                            ->orWhere('status', 'LIKE', "%{$search}%");
+                    });
+
+                if (preg_match('/^P(\d+)$/i', $search, $matches)) {
+                    $q->orWhere('id', $matches[1]);
+                }
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->whereHas('user', function ($userQuery) use ($request) {
+                $userQuery->where('status', $request->status);
+            });
+        }
+
+        if ($request->filled('gender')) {
+            $query->where('gender', $request->gender);
+        }
+
+        $totalPatients = Patient::count();
+
+        $activePatients = Patient::whereHas('user', function ($q) {
+            $q->where('status', 'active');
+        })->count();
+
+        $suspendedPatients = Patient::whereHas('user', function ($q) {
+            $q->where('status', 'suspended');
+        })->count();
+
+        $blockedPatients = Patient::whereHas('user', function ($q) {
+            $q->whereIn('status', ['blocked', 'inactive']);
+        })->count();
+
+        $patients = $query
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('patients.index', compact(
+            'patients',
+            'totalPatients',
+            'activePatients',
+            'suspendedPatients',
+            'blockedPatients'
+        ));
     }
-
-    public function create()
+        public function create()
     {
         return view('patients.create');
     }
@@ -225,8 +281,7 @@ class PatientController extends Controller
 
         return back()->with('success', 'Patient profile updated successfully.');
     }
-
-    public function regeneratePrivacyKey()
+        public function regeneratePrivacyKey()
     {
         $patient = Patient::where('user_id', auth()->id())->first();
 
