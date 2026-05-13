@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Patient;
+use App\Models\Doctor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -18,49 +20,158 @@ class SocialLoginController extends Controller
             $role = 'patient';
         }
 
-        session(['google_register_role' => $role]);
+        session()->put('google_register_role', $role);
 
-        return Socialite::driver('google')->redirect();
+        return Socialite::driver('google')
+            ->scopes(['openid', 'profile', 'email'])
+            ->redirect();
     }
 
     public function handleGoogleCallback()
     {
-        $googleUser = Socialite::driver('google')->user();
+        try {
+            $googleUser = Socialite::driver('google')->user();
 
-        $role = session('google_register_role', 'patient');
-        session()->forget('google_register_role');
+            $selectedRole = session()->pull('google_register_role', 'patient');
 
-        if (!in_array($role, ['patient', 'doctor'])) {
-            $role = 'patient';
-        }
+            if (!in_array($selectedRole, ['patient', 'doctor'])) {
+                $selectedRole = 'patient';
+            }
 
-        $email = strtolower($googleUser->getEmail());
+            $email = strtolower(trim($googleUser->getEmail()));
 
-        $user = User::where('email', $email)->first();
+            if (!$email) {
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'Google email not found. Please try again.');
+            }
 
-        if (!$user) {
-            $user = User::create([
-                'name' => $googleUser->getName() ?? 'Google User',
-                'email' => $email,
-                'google_id' => $googleUser->getId(),
-                'avatar' => $googleUser->getAvatar(),
-                'password' => Hash::make(Str::random(32)),
-                'role' => $role,
-                'status' => $role === 'doctor' ? 'pending' : 'active',
-            ]);
-        } else {
+            /*
+            |--------------------------------------------------------------------------
+            | Find existing user safely
+            |--------------------------------------------------------------------------
+            | Case-insensitive email check to prevent duplicate email issue.
+            |--------------------------------------------------------------------------
+            */
+            $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+            /*
+            |--------------------------------------------------------------------------
+            | New Google Registration
+            |--------------------------------------------------------------------------
+            */
+            if (!$user) {
+                $user = User::create([
+                    'name' => $googleUser->getName() ?: 'Google User',
+                    'email' => $email,
+                    'email_verified_at' => now(),
+                    'google_id' => $googleUser->getId(),
+                    'avatar' => $googleUser->getAvatar(),
+                    'password' => Hash::make(Str::random(40)),
+                    'role' => $selectedRole,
+                    'status' => $selectedRole === 'doctor' ? 'pending' : 'active',
+                ]);
+
+                if ($selectedRole === 'patient') {
+                    Patient::firstOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'name' => $user->name,
+                            'email' => $user->email,
+                        ]
+                    );
+
+                    return redirect()
+                        ->route('login')
+                        ->with('success', 'Patient registration successful. Your Google email is verified. Please login with Google now.');
+                }
+
+                if ($selectedRole === 'doctor') {
+                    Doctor::firstOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'name' => $user->name,
+                            'email' => $user->email,
+                            'verification_status' => 'pending',
+                        ]
+                    );
+
+                    return redirect()
+                        ->route('login')
+                        ->with('success', 'Doctor registration successful. Your account is pending admin approval. After admin approval, you can login with Google.');
+                }
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Existing Google User
+            |--------------------------------------------------------------------------
+            */
             $user->update([
+                'email' => strtolower(trim($user->email)),
+                'email_verified_at' => $user->email_verified_at ?: now(),
                 'google_id' => $googleUser->getId(),
                 'avatar' => $googleUser->getAvatar(),
             ]);
+
+            if ($user->role === 'patient') {
+                Patient::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'name' => $user->name,
+                        'email' => $user->email,
+                    ]
+                );
+            }
+
+            if ($user->role === 'doctor') {
+                Doctor::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'verification_status' => 'pending',
+                    ]
+                );
+
+                if ($user->status !== 'active') {
+                    return redirect()
+                        ->route('login')
+                        ->with('error', 'Your doctor account is pending admin approval. Please wait until admin approves your account.');
+                }
+            }
+
+            if ($user->status !== 'active') {
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'Your account is not active. Please contact admin.');
+            }
+
+            Auth::login($user, true);
+            request()->session()->regenerate();
+
+            return redirect()
+                ->route('dashboard')
+                ->with('success', 'Google login successful.');
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int) $e->errorInfo[1] === 1062) {
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'This email is already registered. Please login with Google using the same email or use your existing account.');
+            }
+
+            return redirect()
+                ->route('login')
+                ->with('error', 'Google authentication database error: ' . $e->getMessage());
+
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('login')
+                ->with('error', 'Google authentication failed: ' . $e->getMessage());
         }
-
-        Auth::login($user);
-
-        return redirect()->route('dashboard');
     }
-
-    public function firebaseGoogleLogin(Request $request)
+        public function firebaseGoogleLogin(Request $request)
     {
         $request->validate([
             'idToken' => ['required', 'string'],
@@ -87,7 +198,7 @@ class SocialLoginController extends Controller
             ], 422);
         }
 
-        $email = strtolower($firebaseUser['email']);
+        $email = strtolower(trim($firebaseUser['email']));
         $name = $firebaseUser['displayName'] ?? 'Google User';
         $googleId = $firebaseUser['localId'] ?? null;
         $avatar = $firebaseUser['photoUrl'] ?? null;
@@ -97,26 +208,93 @@ class SocialLoginController extends Controller
             $role = 'patient';
         }
 
-        $user = User::where('email', $email)->first();
+        $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (!$user) {
             $user = User::create([
                 'name' => $name,
                 'email' => $email,
+                'email_verified_at' => now(),
                 'google_id' => $googleId,
                 'avatar' => $avatar,
-                'password' => Hash::make(Str::random(32)),
+                'password' => Hash::make(Str::random(40)),
                 'role' => $role,
                 'status' => $role === 'doctor' ? 'pending' : 'active',
             ]);
-        } else {
-            $user->update([
-                'google_id' => $googleId,
-                'avatar' => $avatar,
+
+            if ($role === 'patient') {
+                Patient::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'name' => $user->name,
+                        'email' => $user->email,
+                    ]
+                );
+            }
+
+            if ($role === 'doctor') {
+                Doctor::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'verification_status' => 'pending',
+                    ]
+                );
+            }
+
+            return response()->json([
+                'message' => $role === 'doctor'
+                    ? 'Doctor registration successful. Account pending admin approval.'
+                    : 'Patient registration successful. Please login now.',
+                'redirect' => route('login'),
             ]);
         }
 
-        Auth::login($user);
+        $user->update([
+            'email' => strtolower(trim($user->email)),
+            'email_verified_at' => $user->email_verified_at ?: now(),
+            'google_id' => $googleId,
+            'avatar' => $avatar,
+        ]);
+
+        if ($user->role === 'patient') {
+            Patient::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ]
+            );
+        }
+
+        if ($user->role === 'doctor') {
+            Doctor::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'verification_status' => 'pending',
+                ]
+            );
+
+            if ($user->status !== 'active') {
+                return response()->json([
+                    'message' => 'Your doctor account is pending admin approval.',
+                    'redirect' => route('login'),
+                ], 403);
+            }
+        }
+
+        if ($user->status !== 'active') {
+            return response()->json([
+                'message' => 'Your account is not active. Please contact admin.',
+                'redirect' => route('login'),
+            ], 403);
+        }
+
+        Auth::login($user, true);
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Login successful.',

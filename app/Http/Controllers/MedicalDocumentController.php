@@ -153,13 +153,41 @@ class MedicalDocumentController extends Controller
     }
 
     public function show(MedicalDocument $medicalDocument)
-    {
-        $this->authorizeOwner($medicalDocument);
+{
+    $this->authorizeOwner($medicalDocument);
 
-        return view('medical-documents.show', [
-            'medicalDocument' => $medicalDocument,
+    $disk = $medicalDocument->storage_disk ?: $this->disk;
+    $path = $medicalDocument->storage_path;
+
+    if (!$path || !Storage::disk($disk)->exists($path)) {
+        abort(404, 'File not found.');
+    }
+
+    if ($medicalDocument->encryption_mode === 'laravel_crypt_v1') {
+        $encryptedContent = Storage::disk($disk)->get($path);
+
+        $decryptedBase64 = Crypt::decryptString($encryptedContent);
+        $originalContent = base64_decode($decryptedBase64);
+
+        return response($originalContent, 200, [
+            'Content-Type' => $medicalDocument->file_type ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="' . ($medicalDocument->original_name ?: 'medical-document') . '"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
+
+    return response(Storage::disk($disk)->get($path), 200, [
+        'Content-Type' => $medicalDocument->file_type ?: 'application/octet-stream',
+        'Content-Disposition' => 'inline; filename="' . ($medicalDocument->original_name ?: 'medical-document') . '"',
+        'X-Content-Type-Options' => 'nosniff',
+        'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+        'Pragma' => 'no-cache',
+        'Expires' => '0',
+    ]);
+}
         public function download(MedicalDocument $medicalDocument): StreamedResponse
     {
         $this->authorizeOwner($medicalDocument);

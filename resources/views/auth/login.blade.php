@@ -61,7 +61,6 @@
 <body>
 <div class="relative min-h-screen w-full flex items-center justify-center px-6 py-10 overflow-hidden">
 
-    <!-- Background -->
     <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950"></div>
     <div class="absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full bg-emerald-500/25 blur-3xl float"></div>
     <div class="absolute top-10 right-10 w-[520px] h-[520px] rounded-full bg-cyan-500/20 blur-3xl float"></div>
@@ -73,7 +72,6 @@
 
     <div class="relative z-10 w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
 
-        <!-- Left Hero -->
         <div class="hidden lg:block text-white">
             <div class="inline-flex items-center gap-3 px-5 py-3 rounded-full glass">
                 <span class="w-2 h-2 bg-emerald-300 rounded-full animate-pulse"></span>
@@ -97,10 +95,12 @@
                     <div class="text-4xl">🩺</div>
                     <p class="mt-3 font-bold">Doctors</p>
                 </div>
+
                 <div class="glass rounded-3xl p-6 text-center hover:scale-105 transition">
                     <div class="text-4xl">📄</div>
                     <p class="mt-3 font-bold">Documents</p>
                 </div>
+
                 <div class="glass rounded-3xl p-6 text-center hover:scale-105 transition">
                     <div class="text-4xl">🔐</div>
                     <p class="mt-3 font-bold">Security</p>
@@ -108,36 +108,55 @@
             </div>
         </div>
 
-        <!-- Login Card -->
         <div class="w-full flex justify-center">
-            <div class="glass glow w-full max-w-[460px] rounded-[36px] p-8 sm:p-10 shadow-2xl">
+            <div class="glass glow w-full max-w-[480px] rounded-[36px] p-8 sm:p-10 shadow-2xl">
 
                 <div class="text-center">
                     <div class="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-300 to-cyan-300 flex items-center justify-center text-4xl float shadow-xl">
-                        🩺
+                        🫀
                     </div>
 
                     <h2 class="mt-7 text-4xl font-black text-white">Welcome Back</h2>
                     <p class="mt-2 text-sm text-slate-400">Login to your MedHBook account</p>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 mt-8">
-                    <button type="button"
-                            onclick="document.getElementById('email').value='patient@gmail.com'"
-                            class="rounded-2xl border border-white/10 bg-white/5 hover:bg-emerald-500/20 text-white py-4 text-sm font-extrabold transition">
-                        🌐 Patient
-                    </button>
+                @if(session('success'))
+                    <div class="mt-7 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4 text-emerald-100 font-bold shadow-lg">
+                        {{ session('success') }}
+                    </div>
+                @endif
 
-                    <button type="button"
-                            onclick="document.getElementById('email').value='doctor@gmail.com'"
-                            class="rounded-2xl border border-white/10 bg-white/5 hover:bg-cyan-500/20 text-white py-4 text-sm font-extrabold transition">
-                        👨‍⚕️ Doctor
-                    </button>
+                @if(session('error'))
+                    <div class="mt-7 rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-red-100 font-bold shadow-lg">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
+                @if(session('status'))
+                    <div class="mt-7 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-4 text-cyan-100 font-bold shadow-lg">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+                    <a href="{{ route('google.redirect', ['role' => 'patient']) }}"
+                       class="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 hover:bg-emerald-500/20 text-white py-4 text-sm font-extrabold transition shadow-lg">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                             class="w-5 h-5" alt="Google">
+                        Patient Google
+                    </a>
+
+                    <a href="{{ route('google.redirect', ['role' => 'doctor']) }}"
+                       class="w-full flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/10 hover:bg-cyan-500/20 text-white py-4 text-sm font-extrabold transition shadow-lg">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                             class="w-5 h-5" alt="Google">
+                        Doctor Google
+                    </a>
                 </div>
 
                 <div class="flex items-center gap-3 my-7">
                     <div class="h-px flex-1 bg-white/10"></div>
-                    <span class="text-[11px] font-black tracking-widest text-slate-400">LOGIN WITH EMAIL</span>
+                    <span class="text-[11px] font-black tracking-widest text-slate-400">OR LOGIN WITH EMAIL</span>
                     <div class="h-px flex-1 bg-white/10"></div>
                 </div>
 
@@ -146,7 +165,12 @@
 
                     <div>
                         <label for="email" class="block text-sm font-bold text-slate-200 mb-2">Email Address</label>
-                        <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus
+                        <input id="email"
+                               type="email"
+                               name="email"
+                               value="{{ old('email') }}"
+                               required
+                               autofocus
                                class="w-full rounded-2xl bg-white/95 px-5 py-4 text-slate-900 font-semibold outline-none focus:ring-4 focus:ring-emerald-400/60">
 
                         @error('email')
@@ -156,7 +180,10 @@
 
                     <div class="mt-5">
                         <label for="password" class="block text-sm font-bold text-slate-200 mb-2">Password</label>
-                        <input id="password" type="password" name="password" required
+                        <input id="password"
+                               type="password"
+                               name="password"
+                               required
                                class="w-full rounded-2xl bg-white/95 px-5 py-4 text-slate-900 font-semibold outline-none focus:ring-4 focus:ring-cyan-400/60">
 
                         @error('password')
@@ -166,7 +193,8 @@
 
                     <div class="mt-5 flex items-center justify-between gap-4">
                         <label class="inline-flex items-center gap-2 text-sm text-slate-300">
-                            <input type="checkbox" name="remember"
+                            <input type="checkbox"
+                                   name="remember"
                                    class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                             Remember me
                         </label>
@@ -185,9 +213,11 @@
                     </button>
 
                     <div class="mt-7 flex items-center justify-between">
-                        <a href="{{ route('register') }}" class="text-sm font-bold text-emerald-400 hover:text-emerald-300">
+                        <a href="{{ route('register') }}"
+                           class="text-sm font-bold text-emerald-400 hover:text-emerald-300">
                             Create account
                         </a>
+
                         <p class="text-xs text-slate-500">Secure Login</p>
                     </div>
                 </form>

@@ -36,11 +36,12 @@ Route::get('/', function () {
 |--------------------------------------------------------------------------
 */
 
-Route::get('/auth/google/{role?}', [SocialLoginController::class, 'redirectToGoogle'])
-    ->name('google.redirect');
-
 Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogleCallback'])
     ->name('google.callback');
+
+Route::get('/auth/google/{role}', [SocialLoginController::class, 'redirectToGoogle'])
+    ->whereIn('role', ['patient', 'doctor'])
+    ->name('google.redirect');
 
 Route::post('/firebase/google-login', [FirebaseAuthController::class, 'login'])
     ->name('firebase.google.login');
@@ -125,39 +126,49 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     Route::resource('appointments', AppointmentController::class);
     Route::resource('prescriptions', PrescriptionController::class);
 
+    /*
+    |--------------------------------------------------------------------------
+    | Prescription Patient Search + Privacy Verify
+    |--------------------------------------------------------------------------
+    */
 
     Route::get('/prescription/patient-search/live', [PrescriptionController::class, 'livePatientSearch'])
-    ->middleware('role:doctor,admin,super_admin')
-    ->name('prescriptions.patient.search');
+        ->middleware('role:doctor,admin,super_admin')
+        ->name('prescriptions.patient.search');
 
-Route::post('/prescription/patient-verify-privacy', [PrescriptionController::class, 'verifyPatientPrivacyForPrescription'])
-    ->middleware('role:doctor,admin,super_admin')
-    ->name('prescriptions.patient.verify');
-        /*
+    Route::post('/prescription/patient-verify-privacy', [PrescriptionController::class, 'verifyPatientPrivacyForPrescription'])
+        ->middleware('role:doctor,admin,super_admin')
+        ->name('prescriptions.patient.verify');
+
+    /*
     |--------------------------------------------------------------------------
-    | Patient Only Medical Documents Routes
+    | Medical Documents Routes
     |--------------------------------------------------------------------------
-    | Important:
-    | Medical Documents feature is ONLY for patient accounts.
-    | Admin, Super Admin, and Doctor cannot access these routes.
+    | Patient can manage own documents.
+    | Doctor can view/download only verified patient's documents.
+    | Admin/Super Admin can also view/download.
     |--------------------------------------------------------------------------
     */
 
     Route::middleware(['role:patient'])->group(function () {
-        Route::resource('medical-documents', MedicalDocumentController::class);
-
-        Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
-            ->name('medical-documents.download');
-
-        Route::get('/medical-documents/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
-            ->name('medical-documents.metadata');
+        Route::resource('medical-documents', MedicalDocumentController::class)
+            ->except(['show']);
     });
 
-    /*
+    Route::get('/medical-documents/{medicalDocument}', [MedicalDocumentController::class, 'show'])
+        ->middleware('role:patient,doctor,admin,super_admin')
+        ->name('medical-documents.show');
+
+    Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
+        ->middleware('role:patient,doctor,admin,super_admin')
+        ->name('medical-documents.download');
+
+    Route::get('/medical-documents/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
+        ->middleware('role:patient,doctor,admin,super_admin')
+        ->name('medical-documents.metadata');
+            /*
     |--------------------------------------------------------------------------
     | Secure Private File Routes
-    |--------------------------------------------------------------------------
-    | Login required. Individual controller logic handles path/security.
     |--------------------------------------------------------------------------
     */
 
@@ -212,7 +223,8 @@ Route::post('/prescription/patient-verify-privacy', [PrescriptionController::cla
     Route::post('/patient/my-profile', [PatientController::class, 'updateMyProfile'])
         ->middleware('role:patient')
         ->name('patient.my-profile.update');
-            /*
+
+    /*
     |--------------------------------------------------------------------------
     | Doctor Routes
     |--------------------------------------------------------------------------
@@ -237,14 +249,14 @@ Route::post('/prescription/patient-verify-privacy', [PrescriptionController::cla
     Route::post('/doctor/patient/{patient}/verify-privacy', [DoctorDashboardController::class, 'verifyPatientPrivacy'])
         ->middleware('role:doctor')
         ->name('doctor.patient.verify.privacy');
-        
-        Route::get('/doctor/patient/{patient}/profile', [DoctorDashboardController::class, 'verifiedPatientProfile'])
-    ->middleware('role:doctor')
-    ->name('doctor.patient.profile');
 
-Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardController::class, 'verifiedPatientDocuments'])
-    ->middleware('role:doctor')
-    ->name('doctor.patient.medical-documents');
+    Route::get('/doctor/patient/{patient}/profile', [DoctorDashboardController::class, 'verifiedPatientProfile'])
+        ->middleware('role:doctor')
+        ->name('doctor.patient.profile');
+
+    Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardController::class, 'verifiedPatientDocuments'])
+        ->middleware('role:doctor')
+        ->name('doctor.patient.medical-documents');
 
     Route::post('/doctor/my-profile/update', [DoctorController::class, 'updateMyProfile'])
         ->middleware('role:doctor')
@@ -284,8 +296,7 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
             'doctors' => Doctor::count(),
         ]);
     })->middleware('role:admin')->name('admin.dashboard');
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Admin / Super Admin Controls
     |--------------------------------------------------------------------------
@@ -339,7 +350,8 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
             return back()->with('success', 'User unsuspended successfully.');
         })->name('admin.users.unsuspend');
     });
-        /*
+
+    /*
     |--------------------------------------------------------------------------
     | Super Admin Routes
     |--------------------------------------------------------------------------
@@ -358,6 +370,7 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
 
         Route::get('/superadmin/admins', function () {
             $admins = User::where('role', 'admin')->latest()->get();
+
             return view('superadmin.admins', compact('admins'));
         })->name('superadmin.admins');
 
@@ -383,12 +396,14 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
                 'status' => $request->status,
             ]);
 
-            return redirect()->route('superadmin.admins')
+            return redirect()
+                ->route('superadmin.admins')
                 ->with('success', 'Admin created successfully.');
         })->name('superadmin.admin.store');
 
         Route::get('/superadmin/admins/{id}/edit', function ($id) {
             $admin = User::where('role', 'admin')->findOrFail($id);
+
             return view('superadmin.edit-admin', compact('admin'));
         })->name('superadmin.admin.edit');
 
@@ -415,7 +430,8 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
 
             $admin->update($data);
 
-            return redirect()->route('superadmin.admins')
+            return redirect()
+                ->route('superadmin.admins')
                 ->with('success', 'Admin updated successfully.');
         })->name('superadmin.admin.update');
 
@@ -424,7 +440,8 @@ Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardContro
             $admin = User::where('role', 'admin')->findOrFail($id);
             $admin->delete();
 
-            return redirect()->route('superadmin.admins')
+            return redirect()
+                ->route('superadmin.admins')
                 ->with('success', 'Admin deleted successfully.');
         })->name('superadmin.admin.delete');
     });

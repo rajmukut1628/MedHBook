@@ -268,20 +268,47 @@
     </style>
 
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const chamberCards = document.querySelectorAll('.chamber-card');
-        const bookBtn = document.getElementById('topBookBtn');
-        const selectedText = document.getElementById('selectedChamberText');
+document.addEventListener('DOMContentLoaded', function () {
+    const chamberCards = document.querySelectorAll('.chamber-card');
+    const bookBtn = document.getElementById('topBookBtn');
+    const selectedText = document.getElementById('selectedChamberText');
 
-        chamberCards.forEach(function (card) {
-            card.addEventListener('click', function () {
-                const bookUrl = card.dataset.bookUrl;
+    const authRole = @json(auth()->check() ? auth()->user()->role : null);
 
-                if (bookUrl) {
-                    window.location.href = bookUrl;
+    chamberCards.forEach(function (card) {
+        card.addEventListener('click', function () {
+            const chamberIndex = card.dataset.chamberIndex;
+            const bookUrl = card.dataset.bookUrl;
+
+            chamberCards.forEach(function (item) {
+                item.classList.remove('selected-chamber');
+
+                const label = item.querySelector('.select-label');
+                if (label) {
+                    label.innerText = 'Select This Chamber';
                 }
             });
+
+            card.classList.add('selected-chamber');
+
+            const selectedLabel = card.querySelector('.select-label');
+            if (selectedLabel) {
+                selectedLabel.innerText = 'Selected Chamber';
+            }
+
+            if (selectedText) {
+                selectedText.innerText = 'Selected Chamber: Chamber #' + (parseInt(chamberIndex) + 1);
+            }
+
+            if (authRole === 'patient') {
+                if (bookBtn && bookUrl) {
+                    bookBtn.href = bookUrl;
+                }
+
+                window.location.href = bookUrl;
+            }
         });
     });
+});
 </script>
 </x-app-layout>
