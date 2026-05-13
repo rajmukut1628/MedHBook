@@ -255,13 +255,15 @@
                     </div>
 
                     {{-- Upload Button --}}
-                    <div class="mt-7">
-                        <a href="{{ route('medical-documents.create') }}"
-                           class="premium-btn secure-ribbon inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white font-black shadow-2xl shadow-emerald-500/20 hover:scale-[1.03]">
-                            <span class="text-xl">⬆️</span>
-                            Upload Document
-                        </a>
-                    </div>
+                    @if(auth()->check() && auth()->user()->role === 'patient')
+    <div class="mt-7">
+        <a href="{{ route('medical-documents.create') }}"
+           class="premium-btn secure-ribbon inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white font-black shadow-2xl shadow-emerald-500/20 hover:scale-[1.03]">
+            <span class="text-xl">⬆️</span>
+            Upload Document
+        </a>
+    </div>
+@endif
                 </div>
 
                 <div class="grid grid-cols-2 gap-4 min-w-full sm:min-w-[360px] lg:min-w-[390px]">
@@ -349,12 +351,14 @@
                     This page only contains View, Download, and Delete actions.
                 </p>
 
-                <div class="mt-6">
-                    <a href="{{ route('medical-documents.create') }}"
-                       class="premium-btn inline-flex items-center justify-center gap-3 px-7 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black">
-                        Upload Your First Document
-                    </a>
-                </div>
+                @if(auth()->check() && auth()->user()->role === 'patient')
+    <div class="mt-6">
+        <a href="{{ route('medical-documents.create') }}"
+           class="premium-btn inline-flex items-center justify-center gap-3 px-7 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black">
+            Upload Your First Document
+        </a>
+    </div>
+@endif
             </div>
         @endif
                 {{-- Category Dashboard --}}

@@ -35,6 +35,7 @@ Route::get('/', function () {
 | Google / Firebase Login
 |--------------------------------------------------------------------------
 */
+
 Route::get('/auth/google/{role?}', [SocialLoginController::class, 'redirectToGoogle'])
     ->name('google.redirect');
 
@@ -44,7 +45,7 @@ Route::get('/auth/google/callback', [SocialLoginController::class, 'handleGoogle
 Route::post('/firebase/google-login', [FirebaseAuthController::class, 'login'])
     ->name('firebase.google.login');
 
-    Route::get('/google-config-test', function () {
+Route::get('/google-config-test', function () {
     dd(config('services.google'));
 });
 
@@ -103,7 +104,8 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     Route::get('/profile/delete', function () {
         return view('profile.delete');
     })->name('profile.delete.confirm');
-        /*
+
+    /*
     |--------------------------------------------------------------------------
     | Doctor Public Profile
     |--------------------------------------------------------------------------
@@ -123,56 +125,49 @@ Route::middleware(['auth', 'check.status'])->group(function () {
     Route::resource('appointments', AppointmentController::class);
     Route::resource('prescriptions', PrescriptionController::class);
 
-    /*
+
+    Route::get('/prescription/patient-search/live', [PrescriptionController::class, 'livePatientSearch'])
+    ->middleware('role:doctor,admin,super_admin')
+    ->name('prescriptions.patient.search');
+
+Route::post('/prescription/patient-verify-privacy', [PrescriptionController::class, 'verifyPatientPrivacyForPrescription'])
+    ->middleware('role:doctor,admin,super_admin')
+    ->name('prescriptions.patient.verify');
+        /*
     |--------------------------------------------------------------------------
-    | Advanced E2EE Medical Documents Routes
+    | Patient Only Medical Documents Routes
+    |--------------------------------------------------------------------------
+    | Important:
+    | Medical Documents feature is ONLY for patient accounts.
+    | Admin, Super Admin, and Doctor cannot access these routes.
     |--------------------------------------------------------------------------
     */
-    Route::middleware(['auth', 'check.status', 'role:patient'])->group(function () {
-    Route::resource('medical-documents', MedicalDocumentController::class);
 
-    Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
-        ->name('medical-documents.download');
+    Route::middleware(['role:patient'])->group(function () {
+        Route::resource('medical-documents', MedicalDocumentController::class);
 
-    Route::get('/medical-documents/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
-        ->name('medical-documents.metadata');
-});
-Route::middleware(['auth'])->group(function () {
-    Route::get('/private-file/{folder}/{filename}', [PrivateFileController::class, 'show'])
+        Route::get('/medical-documents/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
+            ->name('medical-documents.download');
+
+        Route::get('/medical-documents/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
+            ->name('medical-documents.metadata');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Secure Private File Routes
+    |--------------------------------------------------------------------------
+    | Login required. Individual controller logic handles path/security.
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/secure-file/{folder}/{filename}', [PrivateFileController::class, 'show'])
         ->where('filename', '.*')
-        ->name('private.file.show');
+        ->name('secure.file.show');
 
-    Route::get('/private-file-download/{folder}/{filename}', [PrivateFileController::class, 'download'])
+    Route::get('/secure-file-download/{folder}/{filename}', [PrivateFileController::class, 'download'])
         ->where('filename', '.*')
-        ->name('private.file.download');
-});
-
-
-    Route::prefix('medical-documents')
-        ->name('medical-documents.')
-        ->group(function () {
-
-            Route::get('/', [MedicalDocumentController::class, 'index'])
-                ->name('index');
-
-            Route::get('/create', [MedicalDocumentController::class, 'create'])
-                ->name('create');
-
-            Route::post('/', [MedicalDocumentController::class, 'store'])
-                ->name('store');
-
-            Route::get('/{medicalDocument}', [MedicalDocumentController::class, 'show'])
-                ->name('show');
-
-            Route::get('/{medicalDocument}/download', [MedicalDocumentController::class, 'download'])
-                ->name('download');
-
-            Route::get('/{medicalDocument}/metadata', [MedicalDocumentController::class, 'metadata'])
-                ->name('metadata');
-
-            Route::delete('/{medicalDocument}', [MedicalDocumentController::class, 'destroy'])
-                ->name('destroy');
-        });
+        ->name('secure.file.download');
 
     /*
     |--------------------------------------------------------------------------
@@ -182,7 +177,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/prescriptions/{prescription}/download', [PrescriptionController::class, 'downloadPdf'])
         ->name('prescriptions.download');
-            /*
+
+    /*
     |--------------------------------------------------------------------------
     | Patient Routes
     |--------------------------------------------------------------------------
@@ -216,8 +212,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/patient/my-profile', [PatientController::class, 'updateMyProfile'])
         ->middleware('role:patient')
         ->name('patient.my-profile.update');
-
-    /*
+            /*
     |--------------------------------------------------------------------------
     | Doctor Routes
     |--------------------------------------------------------------------------
@@ -242,6 +237,14 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/doctor/patient/{patient}/verify-privacy', [DoctorDashboardController::class, 'verifyPatientPrivacy'])
         ->middleware('role:doctor')
         ->name('doctor.patient.verify.privacy');
+        
+        Route::get('/doctor/patient/{patient}/profile', [DoctorDashboardController::class, 'verifiedPatientProfile'])
+    ->middleware('role:doctor')
+    ->name('doctor.patient.profile');
+
+Route::get('/doctor/patient/{patient}/medical-documents', [DoctorDashboardController::class, 'verifiedPatientDocuments'])
+    ->middleware('role:doctor')
+    ->name('doctor.patient.medical-documents');
 
     Route::post('/doctor/my-profile/update', [DoctorController::class, 'updateMyProfile'])
         ->middleware('role:doctor')
@@ -250,7 +253,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/doctor/schedule/update', [DoctorController::class, 'updateSchedule'])
         ->middleware('role:doctor')
         ->name('doctor.schedule.update');
-            /*
+
+    /*
     |--------------------------------------------------------------------------
     | Appointment Actions
     |--------------------------------------------------------------------------
@@ -335,8 +339,7 @@ Route::middleware(['auth'])->group(function () {
             return back()->with('success', 'User unsuspended successfully.');
         })->name('admin.users.unsuspend');
     });
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Super Admin Routes
     |--------------------------------------------------------------------------
@@ -442,17 +445,5 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.destroy');
 
 }); // END AUTH GROUP
-
-Route::middleware(['auth'])->group(function () {
-
-    Route::get('/secure-file/{folder}/{filename}', [PrivateFileController::class, 'show'])
-        ->where('filename', '.*')
-        ->name('secure.file.show');
-
-    Route::get('/secure-file-download/{folder}/{filename}', [PrivateFileController::class, 'download'])
-        ->where('filename', '.*')
-        ->name('secure.file.download');
-
-});
 
 require __DIR__ . '/auth.php';

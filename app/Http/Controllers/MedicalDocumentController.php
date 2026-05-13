@@ -236,16 +236,58 @@ class MedicalDocumentController extends Controller
         }
     }
 
-    private function authorizeOwner(MedicalDocument $medicalDocument): void
-    {
-        if (!Auth::check()) {
-            abort(403, 'Please login first.');
-        }
+private function authorizeOwner(MedicalDocument $medicalDocument): void
+{
+    if (!Auth::check()) {
+        abort(403, 'Please login first.');
+    }
 
-        if ((int) $medicalDocument->user_id !== (int) Auth::id()) {
+    $user = Auth::user();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Patient: Own documents only
+    |--------------------------------------------------------------------------
+    */
+    if ($user->role === 'patient') {
+        if ((int) $medicalDocument->user_id !== (int) $user->id) {
             abort(403, 'Unauthorized access.');
         }
+
+        return;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Doctor: Only if patient was verified with privacy key
+    |--------------------------------------------------------------------------
+    */
+    if ($user->role === 'doctor') {
+        $patient = \App\Models\Patient::where('user_id', $medicalDocument->user_id)
+            ->first();
+
+        if (!$patient) {
+            abort(403, 'Patient not found.');
+        }
+
+        if (!session()->get('doctor_verified_patient_' . $patient->id)) {
+            abort(403, 'Please verify patient privacy key first.');
+        }
+
+        return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin / Super Admin
+    |--------------------------------------------------------------------------
+    */
+    if (in_array($user->role, ['admin', 'super_admin'])) {
+        return;
+    }
+
+    abort(403, 'Unauthorized access.');
+}
 
     private function normalizeType(?string $type): string
     {

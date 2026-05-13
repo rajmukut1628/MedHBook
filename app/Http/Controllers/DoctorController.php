@@ -17,7 +17,6 @@ class DoctorController extends Controller
     private function encryptUpload($file, string $folder, string $prefix): string
     {
         $fileName = $prefix . '_' . time() . '_' . Str::random(20) . '.mhb';
-
         $path = $folder . '/' . $fileName;
 
         $content = file_get_contents($file->getRealPath());
@@ -33,6 +32,119 @@ class DoctorController extends Controller
         if ($path && Storage::disk($this->disk)->exists($path)) {
             Storage::disk($this->disk)->delete($path);
         }
+    }
+
+    private function approvedDoctorQuery()
+    {
+        return Doctor::query()
+            ->with('user')
+            ->where('verification_status', 'approved')
+            ->where(function ($query) {
+                $query->whereHas('user', function ($userQuery) {
+                    $userQuery->where('status', 'active');
+                })
+                ->orWhereDoesntHave('user');
+            });
+    }
+
+    private function symptomSpecialistMap(): array
+    {
+        return [
+            'cardiology' => [
+                'heart', 'cardio', 'cardi', 'chest', 'chest pain',
+                'বুক', 'বুক ব্যথা', 'হৃদ', 'হার্ট'
+            ],
+
+            'neurology' => [
+                'brain', 'head', 'headache', 'মাথা', 'মাথা ব্যথা',
+                'neuro', 'migraine', 'স্নায়ু'
+            ],
+
+            'dermatology' => [
+                'skin', 'চামড়া', 'চর্ম', 'rash', 'allergy', 'derma'
+            ],
+
+            'ophthalmologist' => [
+                'eye', 'eyes', 'চোখ', 'vision', 'sight'
+            ],
+
+            'medicine' => [
+                'fever', 'cold', 'cough', 'জ্বর', 'কাশি', 'general',
+                'general physician'
+            ],
+
+            'pediatrician' => [
+                'child', 'baby', 'kids', 'শিশু', 'children'
+            ],
+
+            'orthopedic' => [
+                'bone', 'joint', 'হাড়', 'back pain', 'knee', 'leg pain'
+            ],
+
+            'dentist' => [
+                'tooth', 'teeth', 'দাঁত', 'tooth pain', 'dental'
+            ],
+
+            'ent specialist' => [
+                'ear', 'nose', 'throat', 'কান', 'নাক', 'গলা', 'ent'
+            ],
+
+            'gynecologist' => [
+                'pregnancy', 'period', 'গর্ভ', 'women', 'female'
+            ],
+
+            'nephrologist' => [
+                'kidney', 'কিডনি'
+            ],
+
+            'endocrinologist' => [
+                'diabetes', 'ডায়াবেটিস', 'thyroid'
+            ],
+
+            'gastroenterologist' => [
+                'stomach', 'পেট', 'gas', 'acidity', 'gastric'
+            ],
+        ];
+    }
+
+    private function matchedSpecialists(string $search): array
+    {
+        $matched = [];
+
+        foreach ($this->symptomSpecialistMap() as $specialist => $keywords) {
+            foreach ($keywords as $word) {
+                if (str_contains($search, strtolower($word))) {
+                    $matched[] = $specialist;
+                }
+            }
+        }
+
+        return array_values(array_unique($matched));
+    }
+
+    private function rememberDoctorView(int $doctorId): void
+    {
+        $recent = session()->get('recent_viewed_doctors', []);
+
+        $recent = array_values(array_filter($recent, function ($id) use ($doctorId) {
+            return (int) $id !== (int) $doctorId;
+        }));
+
+        array_unshift($recent, $doctorId);
+
+        session()->put('recent_viewed_doctors', array_slice($recent, 0, 10));
+    }
+        private function orderByRecentViewed($query)
+    {
+        $recentIds = session()->get('recent_viewed_doctors', []);
+
+        if (!empty($recentIds)) {
+            $ids = implode(',', array_map('intval', $recentIds));
+
+            $query->orderByRaw("FIELD(id, {$ids}) DESC");
+        }
+
+        return $query;
     }
 
     public function index()
@@ -59,36 +171,21 @@ class DoctorController extends Controller
 
     public function findDoctors(Request $request)
     {
-        $query = Doctor::where('verification_status', 'approved');
+        /*
+        |--------------------------------------------------------------------------
+        | Patient Side Find Doctors
+        |--------------------------------------------------------------------------
+        | Only 10 approved + active doctors will be visible as suggestions.
+        | Search result also returns top 10 relevant doctors only.
+        | Recent viewed doctors will get priority when no search is used.
+        |--------------------------------------------------------------------------
+        */
+
+        $query = $this->approvedDoctorQuery();
 
         if ($request->filled('search')) {
             $search = strtolower(trim($request->search));
-
-            $map = [
-                'cardiology' => ['heart', 'cardio', 'cardi', 'chest', 'বুক', 'হৃদ', 'হার্ট'],
-                'neurology' => ['brain', 'head', 'মাথা', 'neuro', 'migraine', 'স্নায়ু'],
-                'dermatology' => ['skin', 'চামড়া', 'চর্ম', 'rash', 'derma'],
-                'ophthalmologist' => ['eye', 'চোখ', 'vision'],
-                'medicine' => ['fever', 'cold', 'জ্বর', 'কাশি', 'general'],
-                'pediatrician' => ['child', 'baby', 'kids', 'শিশু'],
-                'orthopedic' => ['bone', 'joint', 'হাড়', 'back pain'],
-                'dentist' => ['tooth', 'teeth', 'দাঁত', 'tooth pain'],
-                'ent specialist' => ['ear', 'nose', 'throat', 'কান', 'নাক', 'গলা'],
-                'gynecologist' => ['pregnancy', 'period', 'গর্ভ'],
-                'nephrologist' => ['kidney', 'কিডনি'],
-                'endocrinologist' => ['diabetes', 'ডায়াবেটিস'],
-                'gastroenterologist' => ['stomach', 'পেট', 'gas', 'acidity'],
-            ];
-
-            $matched = [];
-
-            foreach ($map as $specialist => $keywords) {
-                foreach ($keywords as $word) {
-                    if (str_contains($search, $word)) {
-                        $matched[] = $specialist;
-                    }
-                }
-            }
+            $matched = $this->matchedSpecialists($search);
 
             $query->where(function ($q) use ($search, $matched) {
                 $q->where('name', 'LIKE', "%{$search}%")
@@ -105,9 +202,17 @@ class DoctorController extends Controller
                     }
                 }
             });
-        }
 
-        $doctors = $query->latest()->get();
+            $doctors = $query
+                ->latest()
+                ->limit(10)
+                ->get();
+        } else {
+            $doctors = $this->orderByRecentViewed($query)
+                ->latest()
+                ->limit(10)
+                ->get();
+        }
 
         return view('patient.find-doctors', compact('doctors'));
     }
@@ -165,15 +270,17 @@ class DoctorController extends Controller
             'status' => 'active',
             'profile_photo' => $profilePhotoPath,
         ]);
-
-        if ($profilePhotoPath) {
+                if ($profilePhotoPath) {
             $newPath = str_replace('user-new', 'user-' . $user->id, $profilePhotoPath);
 
             Storage::disk($this->disk)->makeDirectory(dirname($newPath));
             Storage::disk($this->disk)->move($profilePhotoPath, $newPath);
 
             $profilePhotoPath = $newPath;
-            $user->update(['profile_photo' => $profilePhotoPath]);
+
+            $user->update([
+                'profile_photo' => $profilePhotoPath,
+            ]);
         }
 
         Doctor::create([
@@ -193,10 +300,12 @@ class DoctorController extends Controller
             'verification_status' => 'approved',
         ]);
 
-        return redirect()->route('doctors.index')
+        return redirect()
+            ->route('doctors.index')
             ->with('success', 'Doctor account created successfully.');
     }
-        public function show(Doctor $doctor)
+
+    public function show(Doctor $doctor)
     {
         $doctor->load('user');
 
@@ -391,10 +500,14 @@ class DoctorController extends Controller
 
     public function approve(Doctor $doctor)
     {
-        $doctor->update(['verification_status' => 'approved']);
+        $doctor->update([
+            'verification_status' => 'approved',
+        ]);
 
         if ($doctor->user) {
-            $doctor->user->update(['status' => 'active']);
+            $doctor->user->update([
+                'status' => 'active',
+            ]);
         }
 
         return back()->with('success', 'Doctor approved successfully.');
@@ -402,10 +515,14 @@ class DoctorController extends Controller
 
     public function reject(Doctor $doctor)
     {
-        $doctor->update(['verification_status' => 'rejected']);
+        $doctor->update([
+            'verification_status' => 'rejected',
+        ]);
 
         if ($doctor->user) {
-            $doctor->user->update(['status' => 'blocked']);
+            $doctor->user->update([
+                'status' => 'blocked',
+            ]);
         }
 
         return back()->with('success', 'Doctor rejected successfully.');
@@ -419,6 +536,8 @@ class DoctorController extends Controller
     public function publicProfile(Doctor $doctor)
     {
         $doctor->load('user');
+
+        $this->rememberDoctorView($doctor->id);
 
         return view('doctors.public-profile', compact('doctor'));
     }

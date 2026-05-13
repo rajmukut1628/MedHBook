@@ -20,6 +20,7 @@
                 $userPhoto = Auth::user()->profile_photo ?? null;
                 $doctorPhoto = $doctor->profile_photo ?? null;
                 $doctorCv = $doctor->cv ?? null;
+                $isSuperAdmin = Auth::user()->role === 'super_admin';
             @endphp
 
             @if(session('success'))
@@ -53,7 +54,6 @@
 
                         <div class="flex items-center gap-5 flex-wrap">
 
-                            {{-- SECURE PROFILE PHOTO --}}
                             @if(Auth::user()->role === 'doctor' && $doctorPhoto)
                                 <img src="{{ route('secure.file.show', [
                                         'folder' => 'doctor-photos',
@@ -82,10 +82,6 @@
 
                                     <span class="px-4 py-1 rounded-full bg-emerald-500 text-white font-bold text-xs uppercase">
                                         {{ str_replace('_', ' ', Auth::user()->role) }}
-                                    </span>
-
-                                    <span class="px-4 py-1 rounded-full bg-cyan-500/20 border border-cyan-300/30 text-cyan-200 font-bold text-xs uppercase">
-                                        🔐 Secure
                                     </span>
                                 </div>
 
@@ -119,12 +115,12 @@
                                     </div>
                                 @else
                                     <div class="mt-2 text-xs text-emerald-300 font-bold">
-                                        🔐 Profile photo is stored in encrypted private storage.
                                     </div>
                                 @endif
                             </div>
                         </div>
-                                                @if(Auth::user()->role === 'doctor' && $doctor)
+
+                        @if(Auth::user()->role === 'doctor' && $doctor)
                             <a href="{{ route('doctor.public.profile', $doctor->id) }}"
                                class="px-6 py-3 rounded-2xl bg-white/10 border border-white/10 text-white font-black hover:bg-white/20 transition text-center">
                                 View Public Profile
@@ -134,8 +130,7 @@
                     </div>
                 </div>
             </div>
-
-            {{-- DOCTOR PREMIUM PROFILE SUMMARY --}}
+                        {{-- DOCTOR PREMIUM PROFILE SUMMARY --}}
             @if(Auth::user()->role === 'doctor' && $doctor)
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
@@ -181,6 +176,7 @@
                     <h3 class="text-3xl font-black text-white">
                         Profile Settings
                     </h3>
+
                     <p class="text-slate-400 mt-2">
                         Manage your profile, security and account settings from one place.
                     </p>
@@ -195,7 +191,10 @@
                                 🩺
                             </div>
 
-                            <h3 class="text-xl font-black text-white">Edit Doctor Profile</h3>
+                            <h3 class="text-xl font-black text-white">
+                                Edit Doctor Profile
+                            </h3>
+
                             <p class="text-slate-300 mt-2">
                                 Update specialty, qualification, experience, encrypted photo and encrypted CV.
                             </p>
@@ -212,7 +211,10 @@
                                 🏥
                             </div>
 
-                            <h3 class="text-xl font-black text-white">Manage Chambers</h3>
+                            <h3 class="text-xl font-black text-white">
+                                Manage Chambers
+                            </h3>
+
                             <p class="text-slate-300 mt-2">
                                 Add multiple chambers, working days, time and fee.
                             </p>
@@ -230,7 +232,10 @@
                             👤
                         </div>
 
-                        <h3 class="text-xl font-black text-white">Account Info</h3>
+                        <h3 class="text-xl font-black text-white">
+                            Account Info
+                        </h3>
+
                         <p class="text-slate-300 mt-2">
                             Update your account name, email and encrypted profile picture.
                         </p>
@@ -247,7 +252,10 @@
                             🔐
                         </div>
 
-                        <h3 class="text-xl font-black text-white">Security</h3>
+                        <h3 class="text-xl font-black text-white">
+                            Security
+                        </h3>
+
                         <p class="text-slate-300 mt-2">
                             Change your password and keep your account safe.
                         </p>
@@ -258,22 +266,27 @@
                         </a>
                     </div>
 
-                    {{-- DELETE ACCOUNT --}}
-                    <div class="p-6 bg-white/10 backdrop-blur-xl border border-red-500/30 rounded-3xl shadow-xl hover:scale-[1.02] transition">
-                        <div class="h-14 w-14 rounded-2xl bg-red-500/20 flex items-center justify-center text-3xl mb-5">
-                            ⚠️
+                    {{-- DELETE ACCOUNT: HIDDEN ONLY FOR SUPER ADMIN --}}
+                    @if(!$isSuperAdmin)
+                        <div class="p-6 bg-white/10 backdrop-blur-xl border border-red-500/30 rounded-3xl shadow-xl hover:scale-[1.02] transition">
+                            <div class="h-14 w-14 rounded-2xl bg-red-500/20 flex items-center justify-center text-3xl mb-5">
+                                ⚠️
+                            </div>
+
+                            <h3 class="text-xl font-black text-red-400">
+                                Danger Zone
+                            </h3>
+
+                            <p class="text-slate-300 mt-2">
+                                Delete your account permanently.
+                            </p>
+
+                            <a href="{{ route('profile.delete.confirm') }}"
+                               class="mt-5 inline-block px-6 py-3 bg-red-600 text-white rounded-xl font-bold">
+                                Delete Account
+                            </a>
                         </div>
-
-                        <h3 class="text-xl font-black text-red-400">Danger Zone</h3>
-                        <p class="text-slate-300 mt-2">
-                            Delete your account permanently.
-                        </p>
-
-                        <a href="{{ route('profile.delete.confirm') }}"
-                           class="mt-5 inline-block px-6 py-3 bg-red-600 text-white rounded-xl font-bold">
-                            Delete Account
-                        </a>
-                    </div>
+                    @endif
 
                 </div>
             </div>

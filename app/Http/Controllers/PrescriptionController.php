@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Doctor;
 use App\Models\Patient;
 use App\Models\Prescription;
 use Illuminate\Http\Request;
@@ -24,7 +25,9 @@ class PrescriptionController extends Controller
                 }
             })
             ->when($user->role === 'doctor', function ($query) use ($user) {
-                $doctor = $user->doctor;
+                $doctor = Doctor::where('user_id', $user->id)
+                    ->orWhere('email', $user->email)
+                    ->first();
 
                 if ($doctor) {
                     $query->where('doctor_id', $doctor->id);
@@ -44,33 +47,22 @@ class PrescriptionController extends Controller
             abort(403, 'Patients cannot create prescriptions.');
         }
 
-        $patients = Patient::with('user')->latest()->get();
         $selectedPatient = null;
-        $privacyKey = trim((string) $request->query('privacy_key'));
 
         if ($request->filled('patient_id')) {
-            $selectedPatient = Patient::with('user')->find($request->patient_id);
+            $selectedPatient = Patient::with('user')->findOrFail($request->patient_id);
 
-            if (!$selectedPatient) {
+            if (
+                auth()->user()->role === 'doctor' &&
+                !session()->get('doctor_verified_patient_' . $selectedPatient->id)
+            ) {
                 return redirect()
                     ->route('doctor.search.patient')
-                    ->with('error', 'Patient not found.');
-            }
-
-            if (!$privacyKey) {
-                return redirect()
-                    ->route('doctor.search.patient')
-                    ->with('error', 'Privacy key required.');
-            }
-
-            if (strtoupper($privacyKey) !== strtoupper($selectedPatient->privacyKey())) {
-                return redirect()
-                    ->route('doctor.search.patient')
-                    ->with('error', 'Invalid privacy key.');
+                    ->with('error', 'Please verify patient privacy key first.');
             }
         }
 
-        return view('prescriptions.create', compact('patients', 'selectedPatient', 'privacyKey'));
+        return view('prescriptions.create', compact('selectedPatient'));
     }
 
     public function store(Request $request)
@@ -81,7 +73,6 @@ class PrescriptionController extends Controller
 
         $request->validate([
             'patient_id' => 'required|exists:patients,id',
-            'privacy_key' => 'required|string',
             'prescription_date' => 'required|date',
             'diagnosis' => 'required|string',
             'medicines' => 'required|string',
@@ -91,23 +82,28 @@ class PrescriptionController extends Controller
 
         $patient = Patient::findOrFail($request->patient_id);
 
-        if (strtoupper(trim($request->privacy_key)) !== strtoupper($patient->privacyKey())) {
-            return back()
-                ->withInput()
-                ->with('error', 'Invalid or expired privacy key.');
+        if (
+            auth()->user()->role === 'doctor' &&
+            !session()->get('doctor_verified_patient_' . $patient->id)
+        ) {
+            return redirect()
+                ->route('doctor.search.patient')
+                ->with('error', 'Please verify patient privacy key first.');
         }
 
-        $doctor = \App\Models\Doctor::where('user_id', auth()->id())
-    ->orWhere('email', auth()->user()->email)
-    ->first();
+        $doctor = Doctor::where('user_id', auth()->id())
+            ->orWhere('email', auth()->user()->email)
+            ->first();
 
-if (!$doctor) {
-    return back()->withInput()->with('error', 'Doctor profile not found.');
-}
+        if (!$doctor) {
+            return back()
+                ->withInput()
+                ->with('error', 'Doctor profile not found.');
+        }
 
-Prescription::create([
-    'doctor_id' => $doctor->id,
-            'patient_id' => $request->patient_id,
+        Prescription::create([
+            'doctor_id' => $doctor->id,
+            'patient_id' => $patient->id,
             'prescription_date' => $request->prescription_date,
             'diagnosis' => $request->diagnosis,
             'medicines' => $request->medicines,
@@ -119,8 +115,7 @@ Prescription::create([
             ->route('prescriptions.index')
             ->with('success', 'Prescription created successfully.');
     }
-
-    public function show(Prescription $prescription)
+        public function show(Prescription $prescription)
     {
         $this->authorizePrescriptionAccess($prescription);
 
@@ -201,17 +196,29 @@ Prescription::create([
         if ($user->role === 'patient') {
             $patient = Patient::where('user_id', $user->id)->first();
 
-            if (!$patient || $prescription->patient_id !== $patient->id) {
+            if (!$patient || (int) $prescription->patient_id !== (int) $patient->id) {
                 abort(403);
             }
+
+            return;
         }
 
         if ($user->role === 'doctor') {
-            $doctor = $user->doctor;
+            $doctor = Doctor::where('user_id', $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
 
-            if (!$doctor || $prescription->doctor_id !== $doctor->id) {
+            if (!$doctor || (int) $prescription->doctor_id !== (int) $doctor->id) {
                 abort(403);
             }
+
+            return;
         }
+
+        if (in_array($user->role, ['admin', 'super_admin'])) {
+            return;
+        }
+
+        abort(403);
     }
 }

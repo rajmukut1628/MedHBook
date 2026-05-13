@@ -10,7 +10,6 @@
 
             @php
                 $doctorPhoto = $doctor->profile_photo ?? optional($doctor->user)->profile_photo ?? null;
-                $doctorCv = $doctor->cv ?? null;
 
                 $chambers = $doctor->display_chambers ?? [];
 
@@ -27,6 +26,7 @@
                 }
 
                 $lowestFee = collect($chambers)->pluck('fee')->filter()->min() ?? ($doctor->consultation_fee ?? 0);
+                $firstChamberIndex = count($chambers) > 0 ? 0 : null;
             @endphp
 
             {{-- HERO SECTION --}}
@@ -74,21 +74,16 @@
                                     {{ $doctor->email }}
                                 </p>
 
-                                @if($doctorCv)
-                                    <a href="{{ route('secure.file.download', [
-                                            'folder' => 'doctor-cvs',
-                                            'filename' => basename($doctorCv)
-                                        ]) }}"
-                                       class="inline-flex mt-4 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black transition">
-                                        Download CV
-                                    </a>
-                                @endif
+                                <p id="selectedChamberText" class="text-cyan-200 mt-3 text-sm font-bold">
+                                    Selected Chamber: Chamber #1
+                                </p>
                             </div>
                         </div>
 
                         @auth
                             @if(auth()->user()->role === 'patient')
-                                <a href="{{ route('appointments.create', ['doctor_id' => $doctor->id]) }}"
+                                <a id="topBookBtn"
+                                   href="{{ route('appointments.create', ['doctor_id' => $doctor->id, 'chamber_index' => $firstChamberIndex]) }}"
                                    class="px-7 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-black shadow-xl hover:scale-[1.03] transition text-center">
                                     Book Appointment
                                 </a>
@@ -156,16 +151,9 @@
                             <p class="text-slate-400 text-sm font-bold">Blood Group</p>
                             <p class="text-white text-lg mt-1">{{ $doctor->blood_group ?? 'Not added' }}</p>
                         </div>
-
-                        <div>
-                            <p class="text-slate-400 text-sm font-bold">CV Status</p>
-                            <p class="text-white text-lg mt-1">
-                                {{ $doctorCv ? 'Encrypted CV Available' : 'No CV Uploaded' }}
-                            </p>
-                        </div>
                     </div>
                 </div>
-                                {{-- ULTRA PREMIUM CHAMBERS --}}
+                                {{-- CHAMBERS --}}
                 <div class="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
                     <div class="flex items-center justify-between gap-4 mb-6">
                         <div>
@@ -173,7 +161,7 @@
                                 Chambers & Schedule
                             </h2>
                             <p class="text-slate-400 mt-1 text-sm">
-                                Available locations, visiting days, time and fees.
+                                Select one chamber, then use the top Book Appointment button.
                             </p>
                         </div>
 
@@ -184,7 +172,11 @@
 
                     <div class="space-y-5">
                         @foreach($chambers as $index => $chamber)
-                            <div class="rounded-3xl bg-slate-950/60 border border-white/10 p-6 hover:border-emerald-400/50 hover:bg-slate-950/80 transition shadow-xl">
+                            <button type="button"
+                                    data-chamber-index="{{ $index }}"
+                                    data-book-url="{{ route('appointments.create', ['doctor_id' => $doctor->id, 'chamber_index' => $index]) }}"
+                                    class="chamber-card w-full text-left rounded-3xl bg-slate-950/60 border border-white/10 p-6 hover:border-emerald-400/50 hover:bg-slate-950/80 transition shadow-xl {{ $index === 0 ? 'selected-chamber' : '' }}">
+
                                 <div class="flex items-center justify-between gap-4 mb-4">
                                     <h3 class="text-xl font-black text-white">
                                         🏥 Chamber #{{ $index + 1 }}
@@ -232,8 +224,14 @@
                                             </p>
                                         </div>
                                     </div>
+
+                                    <div class="pt-2">
+                                        <span class="select-label inline-flex px-4 py-2 rounded-2xl bg-white/10 text-white font-black text-sm">
+                                            {{ $index === 0 ? 'Selected Chamber' : 'Select This Chamber' }}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
+                            </button>
                         @endforeach
                     </div>
                 </div>
@@ -250,69 +248,40 @@
                     {{ $doctor->bio ?? 'No bio added yet.' }}
                 </p>
             </div>
-
-            {{-- SECURITY NOTICE --}}
-            <div class="bg-emerald-500/10 border border-emerald-300/20 rounded-3xl p-6 shadow-2xl">
-                <h2 class="text-xl font-black text-emerald-200">
-                    🔐 Secure Doctor Files
-                </h2>
-
-                <p class="text-slate-300 mt-2">
-                    Doctor profile photo and CV are stored in encrypted private storage.
-                    They cannot be previewed from the PC folder or opened through public storage links.
-                </p>
-            </div>
-
-            {{-- PATIENT BOOKING CTA --}}
-            @auth
-                @if(auth()->user()->role === 'patient')
-                    <div class="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30 rounded-3xl p-8 shadow-2xl">
-                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-                            <div>
-                                <h2 class="text-2xl font-black text-white">
-                                    Ready to book an appointment?
-                                </h2>
-                                <p class="text-slate-300 mt-2">
-                                    Choose your preferred chamber and continue booking.
-                                </p>
-                            </div>
-
-                            <a href="{{ route('appointments.create', ['doctor_id' => $doctor->id]) }}"
-                               class="px-7 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-black shadow-xl hover:scale-[1.03] transition text-center">
-                                Book Appointment
-                            </a>
-                        </div>
-                    </div>
-                @endif
-            @endauth
-
             {{-- ACTIONS --}}
             <div class="flex flex-wrap gap-4">
                 <a href="{{ url()->previous() }}"
                    class="px-6 py-3 rounded-2xl bg-white/10 border border-white/10 text-white font-bold hover:bg-white/20 transition">
                     Back
                 </a>
-
-                @if($doctorCv)
-                    <a href="{{ route('secure.file.download', [
-                            'folder' => 'doctor-cvs',
-                            'filename' => basename($doctorCv)
-                        ]) }}"
-                       class="px-6 py-3 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700 transition">
-                        Download CV
-                    </a>
-                @endif
-
-                @auth
-                    @if(auth()->user()->role === 'patient')
-                        <a href="{{ route('appointments.create', ['doctor_id' => $doctor->id]) }}"
-                           class="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black hover:bg-emerald-700 transition">
-                            Book Appointment
-                        </a>
-                    @endif
-                @endauth
             </div>
 
         </div>
     </div>
+
+    <style>
+        .selected-chamber{
+            border-color:rgba(16,185,129,.9) !important;
+            background:linear-gradient(135deg,rgba(16,185,129,.20),rgba(6,182,212,.12)) !important;
+            box-shadow:0 0 0 3px rgba(16,185,129,.18), 0 20px 45px rgba(0,0,0,.28);
+        }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const chamberCards = document.querySelectorAll('.chamber-card');
+        const bookBtn = document.getElementById('topBookBtn');
+        const selectedText = document.getElementById('selectedChamberText');
+
+        chamberCards.forEach(function (card) {
+            card.addEventListener('click', function () {
+                const bookUrl = card.dataset.bookUrl;
+
+                if (bookUrl) {
+                    window.location.href = bookUrl;
+                }
+            });
+        });
+    });
+</script>
 </x-app-layout>

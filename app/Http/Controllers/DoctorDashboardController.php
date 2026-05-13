@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\Doctor;
+use App\Models\MedicalDocument;
 use App\Models\Patient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -93,14 +94,11 @@ class DoctorDashboardController extends Controller
             }
 
             $patientsCount = $appointments->pluck('patient_id')->unique()->count();
-
             $pendingCount = $appointments->whereIn('status', ['Pending', 'pending'])->count();
             $approvedCount = $appointments->whereIn('status', ['Approved', 'approved'])->count();
             $rejectedCount = $appointments->whereIn('status', ['Rejected', 'rejected'])->count();
             $cancelledCount = $appointments->whereIn('status', ['Cancelled', 'cancelled'])->count();
-
             $todayCount = $todayAppointments->count();
-
             $earningsEstimate = $approvedCount * ($doctor->consultation_fee ?? 0);
         }
 
@@ -118,74 +116,35 @@ class DoctorDashboardController extends Controller
             'earningsEstimate'
         ));
     }
-
-    public function patients()
+        public function patients()
     {
         $doctor = $this->currentDoctor();
 
         $patients = collect();
 
         if ($doctor) {
-            $patients = Patient::whereIn('id', function ($query) use ($doctor) {
-                $query->select('patient_id')
-                    ->from('appointments')
-                    ->where('doctor_id', $doctor->id);
-            })->latest()->get();
+            $patients = Patient::with('user')
+                ->whereIn('id', function ($query) use ($doctor) {
+                    $query->select('patient_id')
+                        ->from('appointments')
+                        ->where('doctor_id', $doctor->id);
+                })
+                ->latest()
+                ->get();
         }
 
         return view('doctor.patients', compact('patients', 'doctor'));
     }
 
-    public function searchPatient(Request $request)
+    public function searchPatient()
     {
         $doctor = $this->currentDoctor();
 
-        $keyword = trim((string) $request->query('q'));
-        $privacyKey = trim((string) $request->query('privacy_key'));
-
-        $patients = collect();
-
-        if (!$keyword && !$privacyKey) {
-            return view('doctor.search-patient', compact(
-                'patients',
-                'doctor',
-                'keyword',
-                'privacyKey'
-            ));
-        }
-
-        if (!$keyword) {
-            return back()->with('error', 'Please enter patient info.');
-        }
-
-        if (!$privacyKey) {
-            return back()->with('error', 'Privacy key required.');
-        }
-
         $patients = Patient::with('user')
-            ->where(function ($query) use ($keyword) {
-                $query->where('id', $keyword)
-                    ->orWhere('name', 'like', "%{$keyword}%")
-                    ->orWhere('email', 'like', "%{$keyword}%")
-                    ->orWhere('phone', 'like', "%{$keyword}%");
-            })
             ->latest()
-            ->get()
-            ->filter(function ($patient) use ($privacyKey) {
-                return strtoupper($privacyKey) === strtoupper($patient->privacyKey());
-            })
-            ->values();
+            ->get();
 
-        if ($patients->count() === 0) {
-            return back()->with('error', 'Invalid privacy key or patient not found.');
-        }
-
-        return view('doctor.search-patient', compact(
-            'patients',
-            'doctor',
-            'keyword',
-            'privacyKey'
-        ));
+        return view('doctor.search-patient', compact('patients', 'doctor'));
     }
 
     public function verifyPatientPrivacy(Request $request, Patient $patient)
@@ -198,15 +157,42 @@ class DoctorDashboardController extends Controller
             return back()->with('error', 'Invalid privacy key.');
         }
 
-        $documents = $patient->medicalDocuments()
+        session()->put('doctor_verified_patient_' . $patient->id, true);
+
+        return redirect()
+            ->route('doctor.patient.profile', $patient->id)
+            ->with('success', 'Patient verified successfully.');
+    }
+
+    public function verifiedPatientProfile(Patient $patient)
+    {
+        if (!session()->get('doctor_verified_patient_' . $patient->id)) {
+            return redirect()
+                ->route('doctor.search.patient')
+                ->with('error', 'Please verify patient privacy key first.');
+        }
+
+        $patient->load('user');
+
+        return view('doctor.patient-profile', compact('patient'));
+    }
+
+    public function verifiedPatientDocuments(Patient $patient)
+    {
+        if (!session()->get('doctor_verified_patient_' . $patient->id)) {
+            return redirect()
+                ->route('doctor.search.patient')
+                ->with('error', 'Please verify patient privacy key first.');
+        }
+
+        $patient->load('user');
+
+        $documents = MedicalDocument::where('user_id', $patient->user_id)
             ->latest()
             ->get()
             ->groupBy('document_type');
 
-        return view('doctor.patient-documents', compact(
-            'patient',
-            'documents'
-        ));
+        return view('doctor.patient-documents', compact('patient', 'documents'));
     }
 
     public function overview()

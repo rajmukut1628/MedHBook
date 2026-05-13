@@ -102,12 +102,6 @@
                                    class="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-bold hover:bg-blue-600">
                                     View
                                 </a>
-
-                                <a href="{{ route('patients.edit',$patient->id) }}"
-                                   class="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600">
-                                    Edit
-                                </a>
-
                                 <!-- Suspend -->
                                 @if(auth()->user()->role === 'admin' && $patient->user)
 

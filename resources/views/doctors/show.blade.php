@@ -3,6 +3,7 @@
 @section('content')
 <style>
     .wrap{max-width:900px;margin:auto;padding:30px}
+
     .hero{
         background:linear-gradient(135deg,#0f172a,#047857);
         color:white;
@@ -11,6 +12,7 @@
         margin-bottom:24px;
         box-shadow:0 25px 60px rgba(0,0,0,.18)
     }
+
     .hero h1{font-size:34px;font-weight:900;margin:0}
     .hero p{color:#d1fae5;margin-top:8px}
 
@@ -106,8 +108,7 @@
         font-weight:800;
         word-break:break-word;
     }
-
-    .actions{
+        .actions{
         display:flex;
         gap:12px;
         margin-top:28px;
@@ -125,7 +126,6 @@
     }
 
     .btn-gray{background:#e2e8f0;color:#334155}
-    .btn-yellow{background:#f59e0b;color:white}
     .btn-red{background:#dc2626;color:white}
     .btn-blue{background:#2563eb;color:white}
     .btn-green{background:#059669;color:white}
@@ -173,7 +173,8 @@
                 <div class="secure-badge">🔐 Private file access active</div>
             </div>
         </div>
-                <div class="grid">
+
+        <div class="grid">
 
             <div class="box">
                 <div class="label">Doctor ID</div>
@@ -224,10 +225,8 @@
         </div>
 
         <div class="actions">
-            <a href="{{ route('doctors.index') }}" class="btn btn-gray">← Back</a>
-
-            <a href="{{ route('doctors.edit', $doctor->id) }}" class="btn btn-yellow">
-                Edit
+            <a href="{{ route('doctors.index') }}" class="btn btn-gray">
+                ← Back
             </a>
 
             @if($doctorCv)
@@ -239,22 +238,15 @@
                 </a>
             @endif
 
-            @if($doctorPhoto)
-                <a href="{{ route('secure.file.show', [
-                    'folder' => 'doctor-photos',
-                    'filename' => basename($doctorPhoto)
-                ]) }}" target="_blank" class="btn btn-green">
-                    View Photo
-                </a>
-            @endif
-
             <form action="{{ route('doctors.destroy', $doctor->id) }}"
                   method="POST"
                   onsubmit="return confirm('Delete this doctor?')">
                 @csrf
                 @method('DELETE')
 
-                <button type="submit" class="btn btn-red">Delete</button>
+                <button type="submit" class="btn btn-red">
+                    Delete
+                </button>
             </form>
         </div>
 

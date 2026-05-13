@@ -68,6 +68,34 @@ body{
     font-size:13px;
     color:#d1fae5;
 }
+.suggestion-head{
+    margin-bottom:20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+}
+.suggestion-head h2{
+    color:white;
+    font-size:26px;
+    font-weight:900;
+    margin:0;
+}
+.suggestion-head p{
+    color:#cbd5e1;
+    margin-top:6px;
+    font-size:14px;
+}
+.showing-count{
+    padding:10px 16px;
+    border-radius:999px;
+    background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.12);
+    color:white;
+    font-weight:800;
+    font-size:14px;
+}
 .grid{
     display:grid;
     grid-template-columns:repeat(3,1fr);
@@ -125,7 +153,7 @@ body{
     font-weight:700;
 }
 .info{
-    margin-top:16px;
+        margin-top:16px;
     color:#cbd5e1;
     font-size:14px;
     line-height:1.8;
@@ -172,6 +200,15 @@ body{
 }
 </style>
 
+@php
+    /*
+        Blade side safety:
+        Controller theke jodi beshi doctor ase,
+        ei page maximum 10 jon doctor show korbe.
+    */
+    $visibleDoctors = collect($doctors)->take(10);
+@endphp
+
 <div class="wrap">
 
     <div class="top">
@@ -201,9 +238,33 @@ body{
         </div>
     </div>
 
+    <div class="suggestion-head">
+        <div>
+            <h2>
+                @if(request('search'))
+                    Search Results
+                @else
+                    Suggested Doctors
+                @endif
+            </h2>
+
+            <p>
+                @if(request('search'))
+                    Showing top 10 relevant doctors based on your search.
+                @else
+                    Showing maximum 10 doctors as suggestions.
+                @endif
+            </p>
+        </div>
+
+        <div class="showing-count">
+            Showing: {{ $visibleDoctors->count() }} / 10
+        </div>
+    </div>
+
     <div class="grid">
 
-        @forelse($doctors as $doctor)
+        @forelse($visibleDoctors as $doctor)
 
             <a href="{{ route('doctor.public.profile', $doctor->id) }}" class="card-link">
 
@@ -211,7 +272,8 @@ body{
 
                     @if($doctor->profile_photo)
                         <img src="{{ asset('storage/' . $doctor->profile_photo) }}"
-                             class="avatar-img">
+                             class="avatar-img"
+                             alt="{{ $doctor->name }}">
                     @else
                         <div class="avatar">👨‍⚕️</div>
                     @endif
@@ -223,39 +285,42 @@ body{
                     </span>
 
                     <div class="info">
-                        <div><strong>Phone:</strong> {{ $doctor->phone ?? 'N/A' }}</div>
+                        <div>
+                            <strong>Phone:</strong>
+                            {{ $doctor->phone ?? 'N/A' }}
+                        </div>
 
-                       @php
-    $chambers = $doctor->display_chambers ?? [];
-    $firstChamber = $chambers[0] ?? null;
-@endphp
+                        @php
+                            $chambers = $doctor->display_chambers ?? [];
+                            $firstChamber = $chambers[0] ?? null;
+                        @endphp
 
-@if($firstChamber)
-    <div>
-        <strong>Chamber:</strong>
-        {{ Str::limit($firstChamber['address'] ?? 'N/A', 40) }}
-    </div>
+                        @if($firstChamber)
+                            <div>
+                                <strong>Chamber:</strong>
+                                {{ \Illuminate\Support\Str::limit($firstChamber['address'] ?? 'N/A', 40) }}
+                            </div>
 
-    <div>
-        <strong>Days:</strong>
-        {{ !empty($firstChamber['working_days']) ? implode(', ', $firstChamber['working_days']) : 'Not Added' }}
-    </div>
+                            <div>
+                                <strong>Days:</strong>
+                                {{ !empty($firstChamber['working_days']) ? implode(', ', $firstChamber['working_days']) : 'Not Added' }}
+                            </div>
 
-    <div>
-        <strong>Time:</strong>
-        {{ $firstChamber['start_time'] ?? '--' }} - {{ $firstChamber['end_time'] ?? '--' }}
-    </div>
+                            <div>
+                                <strong>Time:</strong>
+                                {{ $firstChamber['start_time'] ?? '--' }} - {{ $firstChamber['end_time'] ?? '--' }}
+                            </div>
 
-    <div>
-        <strong>Fee:</strong>
-        ৳ {{ $firstChamber['fee'] ?? 0 }}
-    </div>
-@else
-    <div><strong>Chamber:</strong> N/A</div>
-    <div><strong>Days:</strong> Not Added</div>
-    <div><strong>Time:</strong> -- - --</div>
-    <div><strong>Fee:</strong> ৳ 0</div>
-@endif
+                            <div>
+                                <strong>Fee:</strong>
+                                ৳ {{ $firstChamber['fee'] ?? 0 }}
+                            </div>
+                        @else
+                            <div><strong>Chamber:</strong> N/A</div>
+                            <div><strong>Days:</strong> Not Added</div>
+                            <div><strong>Time:</strong> -- - --</div>
+                            <div><strong>Fee:</strong> ৳ 0</div>
+                        @endif
 
                         <div>
                             <strong>Experience:</strong>
