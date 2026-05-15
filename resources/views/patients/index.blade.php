@@ -2,11 +2,6 @@
 
 @section('content')
 <style>
-    @keyframes mhbFloat {
-        0%,100% { transform: translateY(0); }
-        50% { transform: translateY(-8px); }
-    }
-
     @keyframes mhbGlow {
         0%,100% {
             box-shadow: 0 20px 80px rgba(15,23,42,.20);
@@ -206,8 +201,7 @@
         border: 1px solid rgba(255,255,255,.12);
         color: white;
     }
-
-    .mhb-alert-success {
+        .mhb-alert-success {
         margin-top: 18px;
         border-radius: 24px;
         background: rgba(16,185,129,.12);
@@ -226,7 +220,8 @@
         padding: 16px 18px;
         font-weight: 900;
     }
-        .mhb-list {
+
+    .mhb-list {
         margin-top: 22px;
         display: flex;
         flex-direction: column;
@@ -240,7 +235,7 @@
         backdrop-filter: blur(20px);
         padding: 14px 16px;
         display: grid;
-        grid-template-columns: 54px 1.4fr .8fr .8fr .8fr auto;
+        grid-template-columns: 54px 1.6fr .9fr .9fr 120px 430px;
         gap: 14px;
         align-items: center;
         box-shadow: 0 16px 45px rgba(0,0,0,.18);
@@ -279,6 +274,7 @@
         font-size: 12px;
         font-weight: 700;
         margin-top: 3px;
+        word-break: break-word;
     }
 
     .mhb-pill {
@@ -290,6 +286,7 @@
         color: #a5f3fc;
         font-size: 12px;
         font-weight: 900;
+        white-space: nowrap;
     }
 
     .mhb-status {
@@ -299,6 +296,7 @@
         font-size: 12px;
         font-weight: 950;
         text-transform: capitalize;
+        white-space: nowrap;
     }
 
     .mhb-active {
@@ -321,9 +319,18 @@
 
     .mhb-actions {
         display: flex;
-        flex-wrap: wrap;
+        align-items: center;
         justify-content: flex-end;
         gap: 8px;
+        flex-wrap: nowrap;
+        min-width: 430px;
+    }
+
+    .mhb-inline-form {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
     }
 
     .mhb-action {
@@ -336,22 +343,28 @@
         cursor: pointer;
         color: white;
         transition: .2s ease;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .mhb-action:hover {
         transform: translateY(-1px);
     }
 
-    .view { background: #2563eb; }
-    .suspend { background: #f59e0b; }
-    .unsuspend { background: #059669; }
-    .delete { background: #991b1b; }
+    .view {
+        background: #2563eb;
+    }
 
-    .mhb-inline-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        align-items: center;
+    .suspend {
+        background: #f59e0b;
+    }
+
+    .unsuspend {
+        background: #059669;
+    }
+
+    .delete {
+        background: #991b1b;
     }
 
     .mhb-small-input,
@@ -364,10 +377,22 @@
         font-size: 12px;
         font-weight: 800;
         outline: none;
+        height: 36px;
+        flex-shrink: 0;
     }
 
     .mhb-small-input {
-        width: 70px;
+        width: 65px;
+        text-align: center;
+    }
+
+    .mhb-small-select {
+        width: 74px;
+    }
+
+    .mhb-disabled-action {
+        opacity: .55;
+        cursor: not-allowed;
     }
 
     .mhb-pagination {
@@ -391,6 +416,9 @@
         .mhb-actions {
             grid-column: 1 / -1;
             justify-content: flex-start;
+            min-width: 100%;
+            overflow-x: auto;
+            padding-bottom: 4px;
         }
     }
 
@@ -462,8 +490,7 @@
                 {{ session('error') }}
             </div>
         @endif
-
-        <div class="mhb-panel">
+                <div class="mhb-panel">
             <form method="GET" action="{{ route('patients.index') }}" class="mhb-filter-grid">
                 <input class="mhb-input"
                        type="text"
@@ -506,7 +533,10 @@
             <div class="mhb-list">
                 @forelse($patients as $patient)
                     @php
-                        $userStatus = strtolower(optional($patient->user)->status ?? 'active');
+                        $linkedUser = $patient->user ?? null;
+                        $authUser = auth()->user();
+
+                        $userStatus = strtolower(optional($linkedUser)->status ?? 'active');
 
                         $statusClass = match($userStatus) {
                             'suspended' => 'mhb-suspended',
@@ -517,15 +547,16 @@
 
                     <div class="mhb-row">
                         <div class="mhb-avatar">
-                            {{ strtoupper(substr($patient->name ?? 'P', 0, 1)) }}
+                            {{ strtoupper(substr($patient->name ?? optional($linkedUser)->name ?? 'P', 0, 1)) }}
                         </div>
 
                         <div>
                             <h3 class="mhb-name">
-                                {{ $patient->name ?? optional($patient->user)->name ?? 'N/A' }}
+                                {{ $patient->name ?? optional($linkedUser)->name ?? 'N/A' }}
                             </h3>
+
                             <div class="mhb-mini">
-                                P{{ $patient->id }} • {{ $patient->email ?? optional($patient->user)->email ?? 'No email' }}
+                                P{{ $patient->id }} • {{ $patient->email ?? optional($linkedUser)->email ?? 'No email' }}
                             </div>
                         </div>
 
@@ -537,7 +568,7 @@
 
                         <div>
                             <span class="mhb-pill">
-                                {{ $patient->blood_group ?? 'Blood N/A' }}
+                                Blood {{ $patient->blood_group ?? 'N/A' }}
                             </span>
                         </div>
 
@@ -552,9 +583,27 @@
                                 View
                             </a>
 
-                            @if(auth()->user()->role === 'admin' && $patient->user)
-                                @if($userStatus !== 'suspended')
-                                    <form action="{{ route('admin.users.suspend', $patient->user->id) }}"
+                            @if($authUser && $authUser->role === 'admin' && $linkedUser)
+                                @if($userStatus === 'suspended')
+                                    <form action="{{ route('admin.users.unsuspend', $linkedUser->id) }}"
+                                          method="POST"
+                                          class="mhb-inline-form">
+                                        @csrf
+                                        @method('PATCH')
+
+                                        <span class="mhb-small-select">Days</span>
+
+                                        <input type="number"
+                                               value="0"
+                                               disabled
+                                               class="mhb-small-input">
+
+                                        <button class="mhb-action unsuspend" type="submit">
+                                            Unsuspend
+                                        </button>
+                                    </form>
+                                @else
+                                    <form action="{{ route('admin.users.suspend', $linkedUser->id) }}"
                                           method="POST"
                                           class="mhb-inline-form">
                                         @csrf
@@ -575,18 +624,38 @@
                                             Suspend
                                         </button>
                                     </form>
-                                @else
-                                    <form action="{{ route('admin.users.unsuspend', $patient->user->id) }}"
-                                          method="POST">
-                                        @csrf
-                                        @method('PATCH')
-
-                                        <button class="mhb-action unsuspend" type="submit">
-                                            Unsuspend
-                                        </button>
-                                    </form>
                                 @endif
-                            @endif
+                           @else
+    @if($patient->user_id)
+        @php
+            $linkedUser = \App\Models\User::find($patient->user_id);
+        @endphp
+
+        @if($linkedUser)
+            <form action="{{ route('admin.users.suspend', $linkedUser->id) }}"
+                  method="POST"
+                  class="mhb-inline-form">
+                @csrf
+                @method('PATCH')
+
+                <select name="duration_type" class="mhb-small-select">
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                </select>
+
+                <input type="number"
+                       name="duration"
+                       min="1"
+                       value="7"
+                       class="mhb-small-input">
+
+                <button class="mhb-action suspend" type="submit">
+                    Suspend
+                </button>
+            </form>
+        @endif
+    @endif
+@endif
 
                             <form action="{{ route('patients.destroy', $patient->id) }}"
                                   method="POST"
@@ -602,6 +671,8 @@
                     </div>
                 @empty
                     <div class="mhb-row">
+                        <div></div>
+
                         <div>
                             <h3 class="mhb-name">No patients found</h3>
                             <div class="mhb-mini">Try changing search, gender or status filter.</div>

@@ -63,5 +63,9 @@ return [
         'client_secret' => env('APPLE_CLIENT_SECRET'),
         'redirect' => env('APPLE_REDIRECT_URL'),
     ],
+    'gemini' => [
+    'key' => env('GEMINI_API_KEY'),
+    'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+],
 
 ];

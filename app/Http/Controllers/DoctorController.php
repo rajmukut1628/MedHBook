@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 use App\Models\Doctor;
 use App\Models\User;
+use App\Services\AiDoctorSpecialtyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
@@ -212,53 +213,57 @@ class DoctorController extends Controller
     ));
 }
 
-    public function findDoctors(Request $request)
-    {
-        /*
-        |--------------------------------------------------------------------------
-        | Patient Side Find Doctors
-        |--------------------------------------------------------------------------
-        | Only 10 approved + active doctors will be visible as suggestions.
-        | Search result also returns top 10 relevant doctors only.
-        | Recent viewed doctors will get priority when no search is used.
-        |--------------------------------------------------------------------------
-        */
+    public function findDoctors(Request $request, AiDoctorSpecialtyService $aiService)
+{
+    $query = $this->approvedDoctorQuery();
 
-        $query = $this->approvedDoctorQuery();
+    $aiSuggestion = null;
+    $search = '';
 
-        if ($request->filled('search')) {
-            $search = strtolower(trim($request->search));
-            $matched = $this->matchedSpecialists($search);
+    if ($request->filled('search')) {
+        $search = strtolower(trim($request->search));
 
-            $query->where(function ($q) use ($search, $matched) {
-                $q->where('name', 'LIKE', "%{$search}%")
-                    ->orWhere('email', 'LIKE', "%{$search}%")
-                    ->orWhere('phone', 'LIKE', "%{$search}%")
-                    ->orWhere('specialist', 'LIKE', "%{$search}%")
-                    ->orWhere('specialization', 'LIKE', "%{$search}%")
-                    ->orWhere('chamber_address', 'LIKE', "%{$search}%");
+        $aiSuggestion = $aiService->detectSpecialty($search);
 
-                if (!empty($matched)) {
-                    foreach ($matched as $sp) {
-                        $q->orWhere('specialist', 'LIKE', "%{$sp}%")
-                            ->orWhere('specialization', 'LIKE', "%{$sp}%");
-                    }
-                }
-            });
+        $matched = $this->matchedSpecialists($search);
 
-            $doctors = $query
-                ->latest()
-                ->limit(10)
-                ->get();
-        } else {
-            $doctors = $this->orderByRecentViewed($query)
-                ->latest()
-                ->limit(10)
-                ->get();
+        if (!empty($aiSuggestion['specialty'])) {
+            $matched[] = strtolower($aiSuggestion['specialty']);
         }
 
-        return view('patient.find-doctors', compact('doctors'));
+        $matched = array_values(array_unique(array_filter($matched)));
+
+        $query->where(function ($q) use ($search, $matched) {
+            $q->where('name', 'LIKE', "%{$search}%")
+                ->orWhere('email', 'LIKE', "%{$search}%")
+                ->orWhere('phone', 'LIKE', "%{$search}%")
+                ->orWhere('specialist', 'LIKE', "%{$search}%")
+                ->orWhere('specialization', 'LIKE', "%{$search}%")
+                ->orWhere('chamber_address', 'LIKE', "%{$search}%");
+
+            foreach ($matched as $sp) {
+                $q->orWhere('specialist', 'LIKE', "%{$sp}%")
+                    ->orWhere('specialization', 'LIKE', "%{$sp}%");
+            }
+        });
+
+        $doctors = $query
+            ->latest()
+            ->limit(10)
+            ->get();
+    } else {
+        $doctors = $this->orderByRecentViewed($query)
+            ->latest()
+            ->limit(10)
+            ->get();
     }
+
+    return view('patient.find-doctors', compact(
+        'doctors',
+        'aiSuggestion',
+        'search'
+    ));
+}
 
     public function create()
     {

@@ -15,15 +15,15 @@
     <style>
         @keyframes mhbBackFloat {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
+            50% { transform: translateY(-3px); }
         }
 
         @keyframes mhbBackGlow {
             0%, 100% {
-                box-shadow: 0 0 28px rgba(16,185,129,.28);
+                box-shadow: 0 0 14px rgba(16,185,129,.22);
             }
             50% {
-                box-shadow: 0 0 58px rgba(34,211,238,.48);
+                box-shadow: 0 0 24px rgba(34,211,238,.32);
             }
         }
 
@@ -66,26 +66,29 @@
         @endisset
 
         @if (!request()->is('/'))
-            <div class="fixed left-5 bottom-6 z-[9999]">
+            <div class="fixed left-3 bottom-4 z-[9999]">
                 <button
                     type="button"
                     onclick="mhbGoBackSmart()"
-                    class="mhb-back-btn group flex items-center gap-3 px-3.5 py-3 rounded-2xl
-                           bg-slate-950/80 border border-white/15 text-white backdrop-blur-2xl
-                           shadow-[0_0_35px_rgba(16,185,129,0.25)]
+                    class="mhb-back-btn group flex items-center gap-2 px-2 py-2 rounded-xl
+                           bg-slate-950/80 border border-white/15 text-white backdrop-blur-xl
+                           shadow-[0_0_18px_rgba(16,185,129,0.20)]
                            hover:border-emerald-300/50 hover:bg-slate-900/90
-                           hover:-translate-y-1 transition-all duration-300">
+                           hover:-translate-y-0.5 transition-all duration-300">
 
-                    <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500
-                                 flex items-center justify-center text-xl font-black
-                                 shadow-[0_0_28px_rgba(16,185,129,0.50)]
-                                 group-hover:scale-110 transition duration-300">
+                    <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500
+                                 flex items-center justify-center text-base font-black
+                                 shadow-[0_0_16px_rgba(16,185,129,0.35)]
+                                 group-hover:scale-105 transition duration-300">
                         ←
                     </span>
 
-                    <span class="hidden sm:block text-left">
-                        <span class="block text-sm font-black leading-none">Go Back</span>
-                        <span class="block text-[11px] text-emerald-300 font-bold mt-1">
+                    <span class="hidden sm:block text-left pr-1">
+                        <span class="block text-[12px] font-black leading-none">
+                            Go Back
+                        </span>
+
+                        <span class="block text-[9px] text-emerald-300 font-bold mt-0.5">
                             Previous Page
                         </span>
                     </span>
